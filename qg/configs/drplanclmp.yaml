@@ -1,3 +1,0 @@
-algorithm: DRPLanczos
-preconditioner:
-  maxpairs: 3

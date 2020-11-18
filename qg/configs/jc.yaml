@@ -1,5 +1,0 @@
-jcdfi:
-  alpha: 1.0e-13
-  cutoff: PT3H
-  type: DolphChebyshev
-  filtered variables: [x]
