@@ -50,6 +50,7 @@ find_package( Eigen3 REQUIRED NO_MODULE HINTS
 find_package( OpenMP COMPONENTS CXX Fortran )
 find_package( MPI REQUIRED COMPONENTS C CXX Fortran )
 find_package( NetCDF REQUIRED COMPONENTS Fortran )
+find_package( HDF5 REQUIRED COMPONENTS HL Fortran )
 find_package( Boost 1.64.0 REQUIRED)
 find_package( eckit 1.11.6 REQUIRED COMPONENTS MPI )
 find_package( fckit 0.7.0 REQUIRED )

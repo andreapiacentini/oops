@@ -484,6 +484,7 @@ if(OpenMP_FOUND)
 endif()
 
 target_link_libraries( ${PROJECT_NAME} PUBLIC NetCDF::NetCDF_Fortran ) # For utils/netcdf_utils_mod
+target_link_libraries( ${PROJECT_NAME} PUBLIC ${HDF5_Fortran_HL_LIBRARIES} ) # For aq
 target_link_libraries( ${PROJECT_NAME} PUBLIC MPI::MPI_Fortran MPI::MPI_CXX )
 target_link_libraries( ${PROJECT_NAME} PUBLIC ${LAPACK_LIBRARIES} )
 target_link_libraries( ${PROJECT_NAME} PUBLIC Eigen3::Eigen )

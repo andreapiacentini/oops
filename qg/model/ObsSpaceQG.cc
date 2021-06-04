@@ -68,21 +68,23 @@ ObsSpaceQG::ObsSpaceQG(const eckit::Configuration & config, const eckit::mpi::Co
   }
 
   ref = ref + bgn.toString() + end.toString();
-  otiter it = theObsFileRegister_.find(ref);
-  if ( it == theObsFileRegister_.end() ) {
+  // otiter it = theObsFileRegister_.find(ref);
+  // if ( it == theObsFileRegister_.end() ) {
     // Open new file
     oops::Log::trace() << "ObsSpaceQG::getHelper: " << "Opening " << ref << std::endl;
     qg_obsdb_setup_f90(key_, fileconf, bgn, end);
-    theObsFileRegister_[ref] = key_;
-  } else {
-    // File already open
-    oops::Log::trace() << "ObsSpaceQG::getHelper: " << ref << " already opened." << std::endl;
-    key_ = it->second;
-  }
-  theObsFileCount_++;
+    // theObsFileRegister_[ref] = key_;
+  // } else {
+  //   // File already open
+  //   oops::Log::trace() << "ObsSpaceQG::getHelper: " << ref << " already opened." << std::endl;
+  //   key_ = it->second;
+  // }
+  // theObsFileCount_++;
 
   // Set variables simulated for different obstypes
   if (obsname_ == "Stream") obsvars_.push_back("Stream");
+  if (obsname_ == "O3") obsvars_.push_back("O3");
+  if (obsname_ == "CO") obsvars_.push_back("CO");
   if (obsname_ == "WSpeed") obsvars_.push_back("WSpeed");
   if (obsname_ == "Wind") {
     obsvars_.push_back("Uwind");
@@ -114,12 +116,12 @@ ObsSpaceQG::~ObsSpaceQG() {}
 // -----------------------------------------------------------------------------
 
 void ObsSpaceQG::save() const {
-  ASSERT(theObsFileCount_ > 0);
-  theObsFileCount_--;
-  if (theObsFileCount_ == 0) {
-    theObsFileRegister_.clear();
+  // ASSERT(theObsFileCount_ > 0);
+  // theObsFileCount_--;
+  // if (theObsFileCount_ == 0) {
+  //  theObsFileRegister_.clear();
     qg_obsdb_delete_f90(key_);
-  }
+  // }
 }
 
 // -----------------------------------------------------------------------------

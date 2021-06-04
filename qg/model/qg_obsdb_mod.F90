@@ -24,6 +24,8 @@ use qg_projection_mod
 use qg_tools_mod
 use random_mod
 use string_f_c_mod
+use H5_UTILS_MOD, ONLY : ip_hdf_namelen, ig_hdfverb, ip_hid_t
+USE HDF5
 
 implicit none
 
@@ -33,6 +35,7 @@ public :: qg_obsdb_registry
 public :: qg_obsdb_setup,qg_obsdb_delete,qg_obsdb_get,qg_obsdb_put,qg_obsdb_locations,qg_obsdb_generate,qg_obsdb_nobs
 ! ------------------------------------------------------------------------------
 integer,parameter :: rseed = 1 !< Random seed (for reproducibility)
+type(datetime), save :: obs_ref_time 
 
 type column_data
   character(len=50) :: colname                !< Column name
@@ -42,7 +45,7 @@ type column_data
 end type column_data
 
 type group_data
-  character(len=50) :: grpname                   !< Group name
+  character(len=ip_hdf_namelen) :: grpname       !< Group name
   type(group_data),pointer :: next => null()     !< Next group
   integer :: nobs                                !< Number of observations
   type(datetime),allocatable :: times(:)         !< Time-slots
@@ -85,8 +88,11 @@ type(datetime),intent(in) :: winend            !< End of window
 
 ! Local variables
 character(len=1024) :: fin,fout
-character(len=:),allocatable :: str
+character(len=:),allocatable :: str, instrname, spcname
 
+! Reference time for hdf5 I/O files
+call datetime_create("1970-01-01T00:00:00Z",obs_ref_time)
+ig_hdfverb = 1
 ! Input file
 if (f_conf%has("obsdatain")) then
   call f_conf%get_or_die("obsdatain.obsfile",str)
@@ -106,14 +112,15 @@ if (f_conf%has("obsdataout")) then
 else
   fout = ''
 endif
-
+! write(*,*) "in qg_obsdb_setup: I setup a new obsdb instance"
 ! Set attributes
-self%ngrp = 0
+self%ngrp = 1 ! each obs space corresponds to only 1 instrument in aq
 self%filein = fin
 self%fileout = fout
-
+call f_conf%get_or_die("instr name",instrname)
+call f_conf%get_or_die("obs type",spcname)
 ! Read observation data
-if (self%filein/='') call qg_obsdb_read(self,winbgn,winend)
+if (self%filein/='') call qg_obsdb_read(self,instrname,spcname,winbgn,winend)
 
 end subroutine qg_obsdb_setup
 ! ------------------------------------------------------------------------------
@@ -186,7 +193,11 @@ endif
 
 ! Find observation column
 call qg_obsdb_find_column(jgrp,col,jcol)
-if (.not.associated(jcol)) call abor1_ftn('qg_obsdb_get: obs column not found')
+
+if (.not.associated(jcol)) then
+  call fckit_log%error('qg_obsdb_get: cannot find '//trim(col))
+  call abor1_ftn('qg_obsdb_get: obs column not found')
+endif
 
 ! Get observation data
 if (allocated(ovec%values)) deallocate(ovec%values)
@@ -277,7 +288,10 @@ real(kind_real), pointer :: z(:), lonlat(:,:)
 
 ! Find observation group
 call qg_obsdb_find_group(self,grp,jgrp)
-if (.not.associated(jgrp)) call abor1_ftn('qg_obsdb_locations: obs group not found')
+if (.not.associated(jgrp)) then
+  call fckit_log%error('qg_obsdb_get: cannot find '//trim(grp))
+  call abor1_ftn('qg_obsdb_locations: obs group not found')
+endif
 nlocs = jgrp%nobs
 
 ! Find observation column
@@ -384,17 +398,23 @@ end subroutine qg_obsdb_nobs
 !  Private
 ! ------------------------------------------------------------------------------
 !> Read observation data
-subroutine qg_obsdb_read(self,winbgn,winend)
+subroutine qg_obsdb_read(self,instrname,spcname,winbgn,winend)
+
+USE H5_UTILS_MOD, ONLY : ip_hid_t, h5state_t, OPEN_H5GROUP, CLOSE_H5GROUP, CLOSE_H5SPACE, CHECK_H5FILE, Get_h5dset_size
+USE H5_READ_MOD, ONLY : OPEN_H5FILE_RDONLY, CLOSE_H5FILE, READSLICE_H5DSET
+USE H5_SELECTION_MOD, ONLY : Get_number_selected_timeelts
 
 implicit none
 
 ! Passed variables
 type(qg_obsdb),intent(inout) :: self !< Observation data
+character(len=*),intent(in) :: instrname             !< Group
+character(len=*),intent(in) :: spcname             !< Group
 type(datetime),intent(in) :: winbgn  !< Start of window
 type(datetime),intent(in) :: winend  !< End of window
 
 ! Local variables
-integer :: igrp,icol,iobs,ncol,nobsfile,jobs
+integer :: igrp,icol,iobs,ncol,nobs,jobs
 integer :: ncid,grpname_id,ngrp_id,nobs_id,ncol_id,times_id,nlev_id,colname_id,values_id
 type(group_data),pointer :: jgrp
 type(column_data),pointer :: jcol
@@ -403,114 +423,84 @@ character(len=50) :: stime
 character(len=1024) :: record
 logical, allocatable :: inwindow(:)
 type(datetime) :: tobs
-type(datetime), allocatable :: alltimes(:)
+type(duration) :: dtwinbgn, dtwinend, dt
+character(len=1024) :: timestr1, timestr2
 real(kind_real),allocatable :: readbuf(:,:)
 
-! Open NetCDF file
-call ncerr(nf90_open(trim(self%filein),nf90_nowrite,ncid))
+integer(kind=ip_hid_t) :: il_hdat_id = 0
+integer(kind=ip_hid_t) :: il_instr_idin
+type(h5state_t) :: h5state
+integer :: id_tmin, id_tmax
+integer :: il_err
+! integer :: ncols = 2
+! character(len=50), dimension(ncols) :: colnames = ['Location','ObsValue']
+! integer, dimension(ncols) :: coldims = [ 2, 1 ]
+real(kind=4), dimension(:), allocatable :: rla_lats, rla_lons, rla_obs
+integer(kind=4), dimension(:), allocatable :: ila_times
+type(datetime),allocatable :: times(:)
+type(qg_obsvec) :: obsloc,obsval,obserr
+! Init the hdf5 fortran library 
+! should go in our HDF5 library in a better place,
+! cause it was hidden in CREATE_H5FILE, which makes no sense
+CALL H5open_f (il_err)
+! Open input hdf5 file
+CALL OPEN_H5FILE_RDONLY(self%filein, il_hdat_id)
+CALL CHECK_H5FILE(il_hdat_id, trim(instrname), "Surface")
 
-! Get dimensions ids
-call ncerr(nf90_inq_dimid(ncid,'ngrp',ngrp_id))
+CALL OPEN_H5GROUP(il_hdat_id, '/'//trim(instrname), h5state%instr_id)
 
-! Get dimensions
-call ncerr(nf90_inquire_dimension(ncid,ngrp_id,len=self%ngrp))
+! Get the window begin and window end time in seconds using the obs_ref_time
+call datetime_to_string(winbgn,timestr1)
+call datetime_to_string(winend,timestr2)
+call datetime_diff(winbgn,obs_ref_time,dtwinbgn)
+call datetime_diff(winend,obs_ref_time,dtwinend)
+! Count the obs for the given instrument in the hdf5 file
+! Loss of precision here cause obs were initially based on mocage datetime, 
+! this will stop working sometime during this century
+id_tmin = int(duration_seconds(dtwinbgn),kind=4)
+id_tmax = int(duration_seconds(dtwinend),kind=4)
+nobs = Get_number_selected_timeelts(h5state,id_tmin,id_tmax)
 
-! Get variables ids
-call ncerr(nf90_inq_varid(ncid,'grpname',grpname_id))
+! Read the data from the hdf5
+allocate(ila_times(nobs),rla_lats(nobs),rla_lons(nobs),rla_obs(nobs))
 
-do igrp=1,self%ngrp
-  ! Allocation
-  if (igrp==1) then
-    allocate(self%grphead)
-    jgrp => self%grphead
-  else
-    allocate(jgrp%next)
-    jgrp => jgrp%next
-  endif
-  write(igrpchar,'(i6.6)') igrp
+CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Timestamp', ila_times)
+CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Latitude', rla_lats)
+CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Longitude', rla_lons)
+CALL READSLICE_H5DSET(h5state, 'OBSERVATIONS/'//trim(spcname)//'/Y', rla_obs)
 
-  ! Get variables
-  call ncerr(nf90_get_var(ncid,grpname_id,jgrp%grpname,(/1,igrp/),(/50,1/)))
+! Setup observation vector for the locations
+call qg_obsvec_setup(obsloc,3,nobs)
 
-  ! Get dimensions ids
-  call ncerr(nf90_inq_dimid(ncid,'nobs_'//igrpchar,nobs_id))
-  call ncerr(nf90_inq_dimid(ncid,'ncol_'//igrpchar,ncol_id))
+! Setup observation vector for the observations
+call qg_obsvec_setup(obsval,1,nobs)
+call qg_obsvec_setup(obserr,1,nobs)
+allocate(times(nobs))
 
-  ! Get dimensions
-  call ncerr(nf90_inquire_dimension(ncid,nobs_id,len=nobsfile))
-  call ncerr(nf90_inquire_dimension(ncid,ncol_id,len=ncol))
-
-  ! Get variables ids
-  call ncerr(nf90_inq_varid(ncid,'times_'//igrpchar,times_id))
-  call ncerr(nf90_inq_varid(ncid,'nlev_'//igrpchar,nlev_id))
-  call ncerr(nf90_inq_varid(ncid,'colname_'//igrpchar,colname_id))
-  call ncerr(nf90_inq_varid(ncid,'values_'//igrpchar,values_id))
-
-  ! Allocation
-  allocate(inwindow(nobsfile))
-  allocate(alltimes(nobsfile))
-
-  ! Read in times
-  call ncerr(nf90_get_var(ncid,grpname_id,jgrp%grpname,(/1,igrp/),(/50,1/)))
-  jgrp%nobs = 0
-  do iobs=1,nobsfile
-    call ncerr(nf90_get_var(ncid,times_id,stime,(/1,iobs/),(/50,1/)))
-    call datetime_create(stime,tobs)
-    if (tobs > winbgn .and. tobs <= winend) then
-      inwindow(iobs) = .true.
-      alltimes(iobs) = tobs
-      jgrp%nobs = jgrp%nobs + 1
-    else
-      inwindow(iobs) = .false.
-    endif
-  end do
-
-  allocate(jgrp%times(jgrp%nobs))
-  jobs=0
-  do iobs=1,nobsfile
-    if (inwindow(iobs)) then
-      jobs = jobs + 1
-      jgrp%times(jobs) = alltimes(iobs)
-    endif
-  end do
-  deallocate(alltimes)
-
-  ! Loop over columns
-  do icol=1,ncol
-    ! Allocation
-    if (icol==1) then
-      allocate(jgrp%colhead)
-      jcol => jgrp%colhead
-    else
-      allocate(jcol%next)
-      jcol => jcol%next
-    endif
-
-    ! Get variables
-    call ncerr(nf90_get_var(ncid,nlev_id,jcol%nlev,(/icol/)))
-    call ncerr(nf90_get_var(ncid,colname_id,jcol%colname,(/1,icol/),(/50,1/)))
-
-    ! Allocation
-    allocate(readbuf(jcol%nlev,nobsfile))
-    allocate(jcol%values(jcol%nlev,jgrp%nobs))
-
-    ! Get values
-    call ncerr(nf90_get_var(ncid,values_id,readbuf(1:jcol%nlev,:),(/1,icol,1/),(/jcol%nlev,1,nobsfile/)))
-
-    jobs = 0
-    do iobs=1,nobsfile
-      if (inwindow(iobs)) then
-        jobs = jobs + 1
-        jcol%values(:,jobs) = readbuf(:,iobs)
-      endif
-    enddo
-    deallocate(readbuf)
-  enddo
-  deallocate(inwindow)
+! Fill the arrays
+do iobs=1,nobs
+  tobs = obs_ref_time
+  dt = int(ila_times(iobs))
+  call datetime_update(tobs,dt)
+  times(iobs) = tobs
+  obsloc%values(:,iobs) = (/real(rla_lons(iobs),kind=kind_real),real(rla_lats(iobs),kind=kind_real),0.0d0/)
+  obsval%values(:,iobs) = rla_obs(iobs)
+  obserr%values(:,iobs) = rla_obs(iobs)
 enddo
+write(*,*) obsloc%values(1,:)
+write(*,*) obsloc%values(2,:)
+write(*,*) obsloc%values(3,:)
+write(*,*) obsval%values(1,:)
+! Store observations data in the obsdb structure
+call qg_obsdb_create(self,trim(spcname),times,obsloc)
+call qg_obsdb_put(self,trim(spcname),'ObsValue',obsval)
+call qg_obsdb_put(self,trim(spcname),'ObsError',obserr) ! This should not be mandatory but it is asked by HofX!!!!
 
-! Close NetCDF file
-call ncerr(nf90_close(ncid))
+deallocate(ila_times,rla_lats,rla_lons,rla_obs,times)
+
+CALL CLOSE_H5GROUP(h5state%instr_id)
+
+CALL CLOSE_H5FILE(il_hdat_id, .FALSE.)
 
 end subroutine qg_obsdb_read
 ! ------------------------------------------------------------------------------

@@ -19,6 +19,10 @@ GetValuesTLAD.cc
 GetValuesTLAD.h
 GomQG.cc
 GomQG.h
+h5_read_mod.F90
+h5_selection_mod.F90
+h5_utils_mod.F90
+h5_write_mod.F90
 IncrementQG.cc
 IncrementQG.h
 LocationsQG.cc
@@ -130,6 +134,7 @@ ecbuild_add_library( TARGET   qg
                      PUBLIC_LIBS     oops
                      HEADER_DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}/qg
                      INSTALL_HEADERS LISTED
+                     INCLUDES ${HDF5_INCLUDE_DIRS}
                      LINKER_LANGUAGE CXX )
 
 #Configure include directory layout for build-tree to match install-tree
