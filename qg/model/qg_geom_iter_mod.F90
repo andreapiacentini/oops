@@ -101,8 +101,10 @@ real(kind_real),intent(out) :: lon    !< Longitude
 if (self%ilon*self%ilat>self%geom%nx*self%geom%ny) call abor1_ftn('qg_geom_iter_current: iterator out of bounds')
 
 ! Get lat/lon
-lat = self%geom%lat(self%ilon,self%ilat)
-lon = self%geom%lon(self%ilon,self%ilat)
+!APlat = self%geom%lat(self%ilon,self%ilat)
+!APlon = self%geom%lon(self%ilon,self%ilat)
+lat = 0.0_kind_real
+lon = 0.0_kind_real
 
 end subroutine qg_geom_iter_current
 ! ------------------------------------------------------------------------------

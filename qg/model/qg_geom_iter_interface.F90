@@ -11,6 +11,7 @@ module qg_geom_iter_interface
 use iso_c_binding
 use kinds
 use qg_geom_iter_mod
+use qg_geom_interface
 use qg_geom_mod
 
 implicit none

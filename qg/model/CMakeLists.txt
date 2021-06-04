@@ -89,7 +89,7 @@ QgTraits.h
 #qg_advect_q_mod.F90
 #qg_change_var_interface.F90
 #qg_change_var_mod.F90
-#qg_constants_mod.F90
+qg_constants_mod.F90
 #qg_convert_q_to_x_mod.F90
 #qg_convert_x_to_q_mod.F90
 #qg_convert_x_to_u_mod.F90

@@ -14,7 +14,7 @@ use fckit_log_module,only: fckit_log
 use fckit_mpi_module,only: fckit_mpi_comm
 use kinds
 use iso_c_binding
-use qg_projection_mod
+!AP use qg_projection_mod
 use qg_geom_mod
 
 implicit none
