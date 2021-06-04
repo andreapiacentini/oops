@@ -138,11 +138,11 @@ extern "C" {
 // -----------------------------------------------------------------------------
 //  Geometry
 // -----------------------------------------------------------------------------
-  void qg_geom_setup_f90(F90geom &, const eckit::Configuration &);
-  void qg_geom_set_atlas_lonlat_f90(const F90geom &, atlas::field::FieldSetImpl *);
-  void qg_geom_set_atlas_functionspace_pointer_f90(const F90geom &,
-                                                   atlas::functionspace::FunctionSpaceImpl *);
-  void qg_geom_fill_atlas_fieldset_f90(const F90geom &, atlas::field::FieldSetImpl *);
+  void qg_geom_setup_f90(F90geom &, const eckit::Configuration &, const eckit::mpi::Comm *);
+//  void qg_geom_set_atlas_lonlat_f90(const F90geom &, atlas::field::FieldSetImpl *);
+//  void qg_geom_set_atlas_functionspace_pointer_f90(const F90geom &,
+//                                                   atlas::functionspace::FunctionSpaceImpl *);
+//  void qg_geom_fill_atlas_fieldset_f90(const F90geom &, atlas::field::FieldSetImpl *);
   void qg_geom_clone_f90(F90geom &, const F90geom &);
   void qg_geom_info_f90(const F90geom &, int &, int &, int &, double &, double &);
   void qg_geom_delete_f90(F90geom &);

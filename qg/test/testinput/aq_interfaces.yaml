@@ -1,0 +1,64 @@
+species:
+  - CO
+  - O_3
+  - NO_2
+  # - NO
+  # - O1D
+  # - NO_3
+  # - H_2O_2
+  # - PAN
+  # - H_2O
+  # - SO_2
+  # - CH_4
+  # - HCHO
+  # - MO2
+  # - N_2O_5
+  # - HNO_3
+  # - XO2
+  # - HCl
+  # - ClO
+  # - BrO
+  # - SO_2
+  # - H_2SO_4
+  # - CH_3
+  # - CH_3O
+  # - NH_3
+  # - HNO_4
+  # - ClONO_2
+  # - O_x
+  # - NO_x
+  # - OH
+  # - HO_2
+
+geometry:
+  nx: 260
+  ny: 200
+  dx: 0.2
+  dy: 0.2
+  x0: -15.9
+  y0:  32.1
+  domain: GEMS02
+  # nx: 720
+  # ny: 440
+  # dx: 0.1
+  # dy: 0.1
+  # x0: -25.95
+  # y0:  28.05
+  # domain: MACC01
+  levels: 5
+  orientation: up
+
+input files:
+  path: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001
+  reference date: '2010-07-04T00:00:00Z'
+
+dirac:
+  ndir: 3
+  ixdir: [ 120,  200,    30]    
+  iydir: [  32,  180,    95]    
+  ildir: [   1,    1,     3]   
+  ifdir: ['CO', 'CO', 'O_3'] 
+
+settings:
+  processors: 6
+  precision: single

@@ -39,10 +39,15 @@ class GeometryQgParameters : public oops::Parameters {
   /// Domain size
   oops::RequiredParameter<int> nx{"nx", this};
   oops::RequiredParameter<int> ny{"ny", this};
-  /// Depths
-  oops::RequiredParameter<std::vector<float>> depths{"depths", this};
-  /// Heating option (AS: should it be in geometry or model?)
-  oops::Parameter<bool> heating{"heating", true, this};
+  oops::RequiredParameter<int> levels{"levels", this};
+  oops::RequiredParameter<double> dx{"dx", this};
+  oops::RequiredParameter<double> dy{"dy", this};
+  oops::RequiredParameter<double> x0{"x0", this};
+  oops::RequiredParameter<double> y0{"y0", this};
+  oops::RequiredParameter<std::string> domain{"domain", this};
+  oops::Parameter<std::string> orientation{"orientation", "up", this};
+  oops::Parameter<std::string> model{"model", "MOCAGE", this};
+  oops::Parameter<int> halo{"halo", 0, this};
 };
 
 class GeometryQGIterator;
