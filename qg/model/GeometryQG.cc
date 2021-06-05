@@ -78,7 +78,10 @@ GeometryQGIterator GeometryQG::end() const {
   int nz;
   double deltax;
   double deltay;
-  qg_geom_info_f90(keyGeom_, nx, ny, nz, deltax, deltay);
+  char orientation[AQ_STRLEN];
+  char domain[AQ_STRLEN];
+  char model[AQ_STRLEN];
+  qg_geom_info_f90(keyGeom_, nx, ny, nz, deltax, deltay, orientation, domain, model);
   return GeometryQGIterator(*this, nx*ny+1);
 }
 // -------------------------------------------------------------------------------------------------
@@ -89,7 +92,10 @@ std::vector<double> GeometryQG::verticalCoord(std::string & vcUnits) const {
   int nz;
   double deltax;
   double deltay;
-  qg_geom_info_f90(keyGeom_, nx, ny, nz, deltax, deltay);
+  char orientation[AQ_STRLEN];
+  char domain[AQ_STRLEN];
+  char model[AQ_STRLEN];
+  qg_geom_info_f90(keyGeom_, nx, ny, nz, deltax, deltay, orientation, domain, model);
   std::vector<double> vc(nz);
   if (vcUnits == "levels") {
     for (int i=0; i < nz; ++i) {vc[i]=i+1;}
@@ -109,10 +115,15 @@ void GeometryQG::print(std::ostream & os) const {
   int nz;
   double deltax;
   double deltay;
-  qg_geom_info_f90(keyGeom_, nx, ny, nz, deltax, deltay);
+  char orientation[AQ_STRLEN];
+  char domain[AQ_STRLEN];
+  char model[AQ_STRLEN];
+  qg_geom_info_f90(keyGeom_, nx, ny, nz, deltax, deltay, orientation, domain, model);
   os << "Geometry:" << std::endl;
   os << "nx = " << nx << ", ny = " << ny << ", nz = " << nz << std::endl;
-  os << "deltax = " << deltax << ", deltay = " << deltay;
+  os << "vert coord orientation = " << orientation << std::endl;
+  os << "deltax = " << deltax << ", deltay = " << deltay << std::endl;
+  os << "model = " << model << ", domain = " << domain;
 }
 // -----------------------------------------------------------------------------
 }  // namespace qg

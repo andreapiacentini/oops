@@ -16,6 +16,7 @@ use kinds
 use iso_c_binding
 !AP use qg_projection_mod
 use qg_geom_mod
+use aq_constants_mod, only : aq_strlen
 
 implicit none
 
@@ -162,7 +163,8 @@ call qg_geom_registry%remove(c_key_self)
 end subroutine qg_geom_delete_c
 ! ------------------------------------------------------------------------------
 !> Get geometry info
-subroutine qg_geom_info_c(c_key_self,c_nx,c_ny,c_nz,c_deltax,c_deltay) bind(c,name='qg_geom_info_f90')
+subroutine qg_geom_info_c(c_key_self,c_nx,c_ny,c_nz,c_deltax,c_deltay,&
+   & c_orientation_ptr, c_domain_ptr, c_model_ptr) bind(c,name='qg_geom_info_f90')
 
 ! Passed variables
 integer(c_int),intent(in) :: c_key_self  !< Geometry
@@ -171,8 +173,14 @@ integer(c_int),intent(inout) :: c_ny     !< Number of points in the meridional d
 integer(c_int),intent(inout) :: c_nz     !< Number of vertical levels
 real(c_double),intent(inout) :: c_deltax !< Zonal cell size
 real(c_double),intent(inout) :: c_deltay !< Meridional cell size
-
+character(kind=c_char), target, intent(inout) :: c_orientation_ptr(*)
+character(kind=c_char), target, intent(inout) :: c_domain_ptr(*)
+character(kind=c_char), target, intent(inout) :: c_model_ptr(*)
 ! Local variables
+integer :: i, length
+character(kind=c_char), pointer :: c_orientation(:)
+character(kind=c_char), pointer :: c_domain(:)
+character(kind=c_char), pointer :: c_model(:)
 type(qg_geom),pointer :: self
 real(c_double) :: x0, y0
 integer(c_int) :: halo
@@ -183,6 +191,24 @@ call qg_geom_registry%get(c_key_self,self)
 
 ! Call Fortran
 call self%info(c_nx,c_ny,c_nz,c_deltax,c_deltay,x0, y0, halo, domain, orientation, model)
+length = len_trim(orientation)
+call c_f_pointer(c_loc(c_orientation_ptr), c_orientation, [aq_strlen])
+do i = 1, length
+   c_orientation(i)=orientation(i:i)
+end do
+c_orientation(length+1) = C_NULL_CHAR
+length = len_trim(domain)
+call c_f_pointer(c_loc(c_domain_ptr), c_domain, [aq_strlen])
+do i = 1, length
+   c_domain(i)=domain(i:i)
+end do
+c_domain(length+1) = C_NULL_CHAR
+length = len_trim(model)
+call c_f_pointer(c_loc(c_model_ptr), c_model, [aq_strlen])
+do i = 1, length
+   c_model(i)=model(i:i)
+end do
+c_model(length+1) = C_NULL_CHAR
 
 end subroutine qg_geom_info_c
 ! ------------------------------------------------------------------------------

@@ -12,6 +12,8 @@
 #ifndef QG_MODEL_QGFORTRAN_H_
 #define QG_MODEL_QGFORTRAN_H_
 
+#define AQ_STRLEN 256
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -144,7 +146,7 @@ extern "C" {
 //                                                   atlas::functionspace::FunctionSpaceImpl *);
 //  void qg_geom_fill_atlas_fieldset_f90(const F90geom &, atlas::field::FieldSetImpl *);
   void qg_geom_clone_f90(F90geom &, const F90geom &);
-  void qg_geom_info_f90(const F90geom &, int &, int &, int &, double &, double &);
+  void qg_geom_info_f90(const F90geom &, int &, int &, int &, double &, double &, char *, char *, char *);
   void qg_geom_delete_f90(F90geom &);
   void qg_geom_dimensions_f90(double &, double &, double &, double &, double &);
 
