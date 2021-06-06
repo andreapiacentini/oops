@@ -1,4 +1,4 @@
-species:
+state variables:
   - CO
   - O_3
   - NO_2
