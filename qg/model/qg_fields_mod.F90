@@ -8,1666 +8,1554 @@
 
 module qg_fields_mod
 
-use atlas_module, only: atlas_field, atlas_fieldset, atlas_real
+use atlas_module
 use fckit_configuration_module, only: fckit_configuration
+use fckit_module
+use fckit_mpi_module
+use mpi
 use datetime_mod
 use duration_mod
 use fckit_log_module,only: fckit_log
 use iso_c_binding
 use kinds
 use missing_values_mod
-use netcdf
 !$ use omp_lib
 use oops_variables_mod
-use qg_constants_mod
-use qg_convert_q_to_x_mod
-use qg_convert_x_to_q_mod
-use qg_convert_x_to_u_mod
-use qg_convert_x_to_v_mod
 use qg_geom_mod
-use qg_geom_iter_mod
+use aq_constants_mod
+use aq_blas_mod
+use aq_field_io_mod
 use qg_interp_mod
 use qg_locs_mod
-use qg_tools_mod
 use random_mod
 
 implicit none
 
 private
 public :: qg_fields
-public :: qg_fields_registry
-public :: qg_fields_create,qg_fields_create_from_other,qg_fields_delete, &
-        & qg_fields_zero,qg_fields_ones,qg_fields_dirac,qg_fields_random, &
-        & qg_fields_copy,qg_fields_copy_lbc,qg_fields_self_add,qg_fields_self_sub,qg_fields_self_mul,qg_fields_axpy, &
-        & qg_fields_self_schur,qg_fields_dot_prod,qg_fields_add_incr,qg_fields_diff_incr,qg_fields_change_resol, &
-        & qg_fields_read_file,qg_fields_write_file,qg_fields_analytic_init,qg_fields_gpnorm,qg_fields_rms,qg_fields_sizes, &
-        & qg_fields_lbc,qg_fields_set_atlas,qg_fields_to_atlas,qg_fields_from_atlas, &
-        & qg_fields_getpoint,qg_fields_setpoint,qg_fields_serialize,qg_fields_deserialize, &
-        & qg_fields_complete,qg_fields_check,qg_fields_check_resolution
+! public :: qg_fields_create,qg_fields_create_from_other,qg_fields_delete, &
+!         & qg_fields_zero,qg_fields_ones,qg_fields_dirac,qg_fields_random, &
+!         & qg_fields_copy,qg_fields_copy_lbc,qg_fields_self_add,qg_fields_self_sub,qg_fields_self_mul,qg_fields_axpy, &
+!         & qg_fields_self_schur,qg_fields_dot_prod,qg_fields_add_incr,qg_fields_diff_incr,qg_fields_change_resol, &
+!         & qg_fields_read_file,qg_fields_write_file,qg_fields_analytic_init,qg_fields_gpnorm,qg_fields_rms,qg_fields_sizes, &
+!         & qg_fields_lbc,qg_fields_set_atlas,qg_fields_to_atlas,qg_fields_from_atlas, &
+!         & qg_fields_getpoint,qg_fields_setpoint,qg_fields_serialize,qg_fields_deserialize, &
+!         & qg_fields_complete,qg_fields_check,qg_fields_check_resolution
 ! ------------------------------------------------------------------------------
 integer,parameter :: rseed = 7 !< Random seed (for reproducibility)
 
-type :: qg_fields
-  type(qg_geom),pointer :: geom                !< Geometry
-  logical :: lbc                               !< Boundaries are present
-  real(kind_real),allocatable :: x(:,:,:)      !< Streamfunction
-  real(kind_real),allocatable :: q(:,:,:)      !< Potential vorticity
-  real(kind_real),allocatable :: u(:,:,:)      !< U wind
-  real(kind_real),allocatable :: v(:,:,:)      !< V wind
-  real(kind_real),allocatable :: x_north(:)    !< Streamfunction on northern wall
-  real(kind_real),allocatable :: x_south(:)    !< Streamfunction on southern wall
-  real(kind_real),allocatable :: q_north(:,:)  !< q on northern wall
-  real(kind_real),allocatable :: q_south(:,:)  !< q on southern wall
+type aq_fld_ptr(prec)
+  integer, kind :: prec = aq_real
+  real(kind=prec), pointer :: fld(:,:)
+end type aq_fld_ptr
+
+type, extends(atlas_FieldSet) :: qg_fields
+  integer(atlas_kind_idx)       :: n_vars
+  character(len=:), allocatable :: fs_name
+  type(datetime)                :: date
+  character(len=:), allocatable :: var_name(:)
+  type(qg_geom), pointer        :: geom
+  type(fckit_mpi_comm)          :: fmpi
+  integer                       :: prec
+  integer                       :: mpi_kind
+  type(aq_fld_ptr(aq_real)),   allocatable :: fldsd(:)
+  type(aq_fld_ptr(aq_single)), allocatable :: fldss(:)
+  integer                       :: locsize
+contains
+  procedure, public :: create                => aq_field_create
+  procedure, public :: create_from           => aq_field_create_from_other
+  procedure, public :: final                 => aq_field_delete
+  procedure, public :: delete                => aq_field_delete
+  procedure, public :: zero                  => aq_field_zero
+  procedure, public :: ones                  => aq_field_ones
+  procedure, public :: dirac                 => aq_field_dirac
+  procedure, public :: random                => aq_field_random
+  procedure, public :: copy                  => aq_field_copy
+  procedure, public :: self_add              => aq_field_self_add
+  procedure, public :: self_sub              => aq_field_self_sub
+  procedure, public :: self_mul              => aq_field_self_mul
+  procedure, public :: add_incr              => aq_field_add_incr
+  procedure, public :: diff_incr             => aq_field_diff_incr
+  procedure, public :: axpy                  => aq_field_self_axpy
+  procedure, public :: schur                 => aq_field_self_schur
+  procedure, public :: dot_prod_with         => aq_field_dot_prod_with
+  procedure, public :: norm                  => aq_field_norm2
+  generic,   public :: stats                 => aq_field_stats_tot, &
+     &                                          aq_field_stats_per_var, &
+     &                                          aq_field_stats_per_var_lev
+  procedure, public :: info                  => aq_field_info
+  procedure, public :: write                 => aq_field_write
+  procedure, public :: read                  => aq_field_read
+  procedure, public :: analytic_IC           => aq_field_ana_IC
+  procedure, public :: var                   => aq_field_var
+  procedure, public :: gather_var_at_lev     => aq_field_gather_var_at_lev
+  procedure, public :: scatteradd_var_at_lev => aq_field_scatteradd_var_at_lev
+  procedure, public :: serialsize            => aq_field_serial_size
+  procedure, public :: serialize             => aq_field_serialize
+  procedure, public :: deserialize           => aq_field_deserialize
+  generic,   public :: serialize_prec        => aq_field_serialize_single, &
+     &                                          aq_field_serialize_real
+  generic,   public :: deserialize_prec      => aq_field_deserialize_single, &
+     &                                          aq_field_deserialize_real
+  !
+  procedure, public :: kind                  => aq_field_kind
+  procedure, public :: name                  => aq_field_name
+  procedure, public :: rename                => aq_field_rename
+  !
+  procedure, private :: idx_var              => aq_field_idx_var
+  procedure, private :: aq_field_stats_tot, &
+     &                  aq_field_stats_per_var, &
+     &                  aq_field_stats_per_var_lev
+  procedure, private :: aq_field_serialize_single, &
+     &                  aq_field_serialize_real, &
+     &                  aq_field_deserialize_single, &
+     &                  aq_field_deserialize_real
+  !
+  final :: aq_field_final_auto
+  !
 end type qg_fields
 
-#define LISTED_TYPE qg_fields
-
-!> Linked list interface - defines registry_t type
-#include "oops/util/linkedList_i.f"
-
-!> Global registry
-type(registry_t) :: qg_fields_registry
+interface aq_field_stats
+  module procedure aq_field_stats_tot
+  module procedure aq_field_stats_per_var
+  module procedure aq_field_stats_per_var_lev
+end interface aq_field_stats
 ! ------------------------------------------------------------------------------
 contains
-! ------------------------------------------------------------------------------
-! Public
-! ------------------------------------------------------------------------------
-!> Linked list implementation
-#include "oops/util/linkedList_c.f"
+
 ! ------------------------------------------------------------------------------
 !> Create fields from geometry and variables
-subroutine qg_fields_create(self,geom,vars,lbc)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self   !< Fields
-type(qg_geom),target,intent(in) :: geom !< Geometry
-type(oops_variables),intent(in) :: vars !< List of variables
-logical,intent(in) :: lbc               !< Boundaries flag
-
-! Local variables
-character(len=1024) :: record
-
-! Associate geometry
-self%geom => geom
-
-! Set boundaries
-self%lbc = lbc
-
-! Allocate 3d fields
-if (vars%has('x')) allocate(self%x(self%geom%nx,self%geom%ny,self%geom%nz))
-if (vars%has('q')) allocate(self%q(self%geom%nx,self%geom%ny,self%geom%nz))
-if (vars%has('u')) allocate(self%u(self%geom%nx,self%geom%ny,self%geom%nz))
-if (vars%has('v')) allocate(self%v(self%geom%nx,self%geom%ny,self%geom%nz))
-
-! Allocate boundaries
-if (self%lbc) then
-  ! Allocation
-  allocate(self%x_north(self%geom%nz))
-  allocate(self%x_south(self%geom%nz))
-  allocate(self%q_north(self%geom%nx,self%geom%nz))
-  allocate(self%q_south(self%geom%nx,self%geom%nz))
-endif
-
-! Initialize
-call qg_fields_zero(self)
-
-end subroutine qg_fields_create
+subroutine aq_field_create(self, geom, vars, name, date, kind)
+  !
+  class(qg_fields),           intent(inout) :: self
+  type(qg_geom), target,      intent(in)    :: geom
+  type(oops_variables),       intent(in)    :: vars
+  character(len=*), optional, intent(in)    :: name
+  type(datetime), optional,   intent(in)    :: date
+  integer, optional,          intent(in)    :: kind
+  !
+  integer(atlas_kind_idx) :: ib_var
+  type(atlas_Field) :: afld
+  !
+  if (present(kind)) then
+     self%prec = kind
+     if (kind == aq_single) then
+        self%mpi_kind = MPI_FLOAT
+     else
+        self%mpi_kind = MPI_DOUBLE
+     end if
+  else
+     self%prec = aq_real
+     self%mpi_kind = MPI_DOUBLE
+  end if
+  !
+  if (present(name)) then
+     self%fs_name = trim(name)
+  else
+     self%fs_name = "aq_fieldset"
+  end if
+  !
+  if (present(date)) then
+     self%date = date
+  else
+     call datetime_create("1970-01-01T00:00:00Z", self%date)
+  end if
+  !
+  if ( self%is_null() ) &
+     & self = atlas_FieldSet(self%fs_name)
+  !
+  self%n_vars = vars%nvars()
+  self%var_name = vars%varlist()
+  !
+  self%geom => geom
+  self%fmpi = geom%fmpi
+  self%locsize = self%geom%fs_3d%size()*self%geom%levels
+  !
+  select case(self%prec)
+  case(aq_single)
+     allocate(aq_fld_ptr(aq_single)::self%fldss(self%n_vars))
+     do ib_var = 1, self%n_vars
+        afld = self%geom%fs_3d%create_field(name=trim(self%var_name(ib_var)),  &
+           &                                     kind=atlas_real(aq_single))
+        call self%add(afld)
+        call afld%data(self%fldss(ib_var)%fld)
+        call afld%final()
+     end do
+  case(aq_real)
+     allocate(aq_fld_ptr(aq_real)::self%fldsd(self%n_vars))
+     do ib_var = 1, self%n_vars
+        afld = self%geom%fs_3d%create_field(name=trim(self%var_name(ib_var)),  &
+           &                                     kind=atlas_real(aq_real))
+        call self%add(afld)
+        call afld%data(self%fldsd(ib_var)%fld)
+        call afld%final()
+     end do
+  end select
+  !
+  call self%zero()
+  !
+end subroutine aq_field_create
 ! ------------------------------------------------------------------------------
 !> Create fields from another one
-subroutine qg_fields_create_from_other(self,other,geom)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self   !< Fields
-type(qg_fields),intent(in) :: other     !< Other fields
-type(qg_geom),target,intent(in) :: geom !< Geometry
-
-! Associate geometry
-self%geom => geom
-
-! Copy attributes
-self%lbc = other%lbc
-
-! Allocate 3d fields
-if (allocated(other%x)) allocate(self%x(self%geom%nx,self%geom%ny,self%geom%nz))
-if (allocated(other%q)) allocate(self%q(self%geom%nx,self%geom%ny,self%geom%nz))
-if (allocated(other%u)) allocate(self%u(self%geom%nx,self%geom%ny,self%geom%nz))
-if (allocated(other%v)) allocate(self%v(self%geom%nx,self%geom%ny,self%geom%nz))
-
-! Allocate boundaries
-if (self%lbc) then
-  ! Allocation
-  allocate(self%x_north(self%geom%nz))
-  allocate(self%x_south(self%geom%nz))
-  allocate(self%q_north(self%geom%nx,self%geom%nz))
-  allocate(self%q_south(self%geom%nx,self%geom%nz))
-endif
-
-! Initialize
-call qg_fields_zero(self)
-
-end subroutine qg_fields_create_from_other
+subroutine aq_field_create_from_other(self, other, name, date, kind)
+  class(qg_fields),           intent(inout) :: self
+  type(qg_fields),            intent(in)    :: other
+  character(len=*), optional, intent(in)    :: name
+  type(datetime), optional,   intent(in)    :: date
+  integer, optional,          intent(in)    :: kind
+  !
+  integer(atlas_kind_idx) :: ib_var
+  type(atlas_Field) :: afld
+  !
+  if (present(name)) then
+     self%fs_name = trim(name)
+  else
+     self%fs_name = other%name()
+  end if
+  !
+  if (present(date)) then
+     self%date = date
+  else
+     self%date = other%date
+  end if
+  !
+  if ( self%is_null() ) &
+     & self = atlas_FieldSet(self%fs_name)
+  !
+  self%n_vars = other%n_vars
+  allocate(character(aq_varlen)::self%var_name(self%n_vars))
+  self%var_name(:) = other%var_name(:)
+  !
+  self%geom => other%geom
+  self%fmpi = self%geom%fmpi
+  self%locsize = self%geom%fs_3d%size()*self%geom%levels
+  !
+  if (present(kind)) then
+     self%prec = kind
+     if (kind == aq_single) then
+        self%mpi_kind = MPI_FLOAT
+     else
+        self%mpi_kind = MPI_DOUBLE
+     end if
+  else
+     self%prec = other%prec
+     self%mpi_kind = other%mpi_kind
+  end if
+  select case(self%prec)
+  case(aq_single)
+     allocate(aq_fld_ptr(aq_single)::self%fldss(self%n_vars))
+     do ib_var = 1, self%n_vars
+        afld = self%geom%fs_3d%create_field(name=trim(self%var_name(ib_var)),  &
+           &                                     kind=atlas_real(aq_single))
+        call self%add(afld)
+        call afld%data(self%fldss(ib_var)%fld)
+        call afld%final()
+     end do
+  case(aq_real)
+     allocate(aq_fld_ptr(aq_real)::self%fldsd(self%n_vars))
+     do ib_var = 1, self%n_vars
+        afld = self%geom%fs_3d%create_field(name=trim(self%var_name(ib_var)),  &
+           &                                     kind=atlas_real(aq_real))
+        call self%add(afld)
+        call afld%data(self%fldsd(ib_var)%fld)
+        call afld%final()
+     end do
+  end select
+  !
+  call self%zero()
+  !
+end subroutine aq_field_create_from_other
 ! ------------------------------------------------------------------------------
 !> Delete fields
-subroutine qg_fields_delete(self)
+subroutine aq_field_final_auto(self)
+  type(qg_fields), intent(inout) :: self
+  !
+  call self%delete()
+  !
+end subroutine aq_field_final_auto
 
-implicit none
+subroutine aq_field_delete(this)
+  class(qg_fields), intent(inout) :: this
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (allocated(this%var_name)) deallocate(this%var_name)
+  if (allocated(this%fldsd)) then
+     do ib_var = 1, this%n_vars
+        nullify(this%fldsd(ib_var)%fld)
+     end do
+     deallocate(this%fldsd)
+  end if
+  if (allocated(this%fldss)) then
+     do ib_var = 1, this%n_vars
+        nullify(this%fldss(ib_var)%fld)
+     end do
+     deallocate(this%fldss)
+  end if
+  call this%atlas_FieldSet%final()
+  !
+end subroutine aq_field_delete
 
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
+function aq_field_kind(this) result(kind)
+  class(qg_fields), intent(in) :: this
+  integer                      :: kind
+  !
+  kind = this%prec
+  !
+end function aq_field_kind
 
-! Release memory
-if (allocated(self%x)) deallocate(self%x)
-if (allocated(self%q)) deallocate(self%q)
-if (allocated(self%u)) deallocate(self%u)
-if (allocated(self%v)) deallocate(self%v)
-if (allocated(self%x_north)) deallocate(self%x_north)
-if (allocated(self%x_south)) deallocate(self%x_south)
-if (allocated(self%q_north)) deallocate(self%q_north)
-if (allocated(self%q_south)) deallocate(self%q_south)
+function aq_field_name(this) result(name)
+  class(qg_fields), intent(in)  :: this
+  character(len=:), allocatable :: name
+  !
+  name = trim(this%fs_name)
+  !
+end function aq_field_name
 
-end subroutine qg_fields_delete
-! ------------------------------------------------------------------------------
-!> Set fields to zero
-subroutine qg_fields_zero(self)
+subroutine aq_field_rename(self, name)
+  class(qg_fields), intent(inout) :: self
+  character(len=*), intent(in)    :: name
+  !
+  self%fs_name = trim(name)
+  !
+end subroutine aq_field_rename
 
-implicit none
+subroutine aq_field_zero(self)
+  class(qg_fields), intent(inout) :: self
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec == aq_single) then
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        self%fldss(ib_var)%fld(:,:) = 0.0_aq_single
+     end do
+!$omp end parallel do
+  else
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        self%fldsd(ib_var)%fld(:,:) = 0.0_aq_real
+     end do
+!$omp end parallel do
+  end if
+  !
+end subroutine aq_field_zero
 
-! Passed variables
-type(qg_fields),intent(inout) :: self
+subroutine aq_field_ones(self)
+  class(qg_fields), intent(inout) :: self
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec == aq_single) then
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        self%fldss(ib_var)%fld(:,:) = 1.0_aq_single
+     end do
+!$omp end parallel do
+  else
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        self%fldsd(ib_var)%fld(:,:) = 1.0_aq_real
+     end do
+!$omp end parallel do
+  end if
+  !
+end subroutine aq_field_ones
 
-! Check field
-call qg_fields_check(self)
+subroutine aq_field_dirac(self, config)
+  class(qg_fields),          intent(inout) :: self
+  type(fckit_Configuration), intent(in)    :: config
+  !
+  integer :: ndir
+  integer, allocatable :: ixdir(:)
+  integer, allocatable :: iydir(:)
+  integer, allocatable :: ildir(:)
+  character(len=:), allocatable :: ifdir(:)
+  !
+  integer :: ib_dir
+  !
+  call config%get_or_die("ndir", ndir)
+  call config%get_or_die("ixdir", ixdir)
+  call config%get_or_die("iydir", iydir)
+  call config%get_or_die("ildir", ildir)
+  call config%get_or_die("ifdir", ifdir)
+  !
+  call self%zero()
+  !
+  do ib_dir = 1, ndir
+     if (ixdir(ib_dir) > self%geom%grid%nx(1) .or. ixdir(ib_dir) < 1) &
+        & call abor1_ftn('X index for dirac out of bounds')
+     if (iydir(ib_dir) > self%geom%grid%ny() .or. iydir(ib_dir) < 1) &
+        & call abor1_ftn('Y index for dirac out of bounds')
+     if (ildir(ib_dir) > self%geom%levels .or. ildir(ib_dir) < 1) &
+        & call abor1_ftn('Level for dirac out of bounds')
+     if ( iydir(ib_dir) >= self%geom%fs_3d%j_begin() .and. &
+        & iydir(ib_dir) <= self%geom%fs_3d%j_end()) then
+        if ( ixdir(ib_dir) >= self%geom%fs_3d%i_begin(iydir(ib_dir)) .and. &
+           & ixdir(ib_dir) <= self%geom%fs_3d%i_end(iydir(ib_dir))) then
+           if (self%prec == aq_single) then
+              self%fldss(self%idx_var(trim(ifdir(ib_dir))))%fld(ildir(ib_dir),&
+                 &      self%geom%fs_3d%index(ixdir(ib_dir),iydir(ib_dir))) = 1.0_aq_single
+           else
+              self%fldsd(self%idx_var(trim(ifdir(ib_dir))))%fld(ildir(ib_dir),&
+                 &      self%geom%fs_3d%index(ixdir(ib_dir),iydir(ib_dir))) = 1.0_aq_real
+           end if
+        end if
+     end if
+  end do
+  !
+  call self%halo_exchange()
+  !
+  deallocate(ixdir)
+  deallocate(iydir)
+  deallocate(ildir)
+  deallocate(ifdir)
+  !
+end subroutine aq_field_dirac
 
-! Set fields to zero
-if (allocated(self%x)) self%x = 0.0_kind_real
-if (allocated(self%q)) self%q = 0.0_kind_real
-if (allocated(self%u)) self%u = 0.0_kind_real
-if (allocated(self%v)) self%v = 0.0_kind_real
-if (self%lbc) then
-  self%x_north = 0.0_kind_real
-  self%x_south = 0.0_kind_real
-  self%q_north = 0.0_kind_real
-  self%q_south = 0.0_kind_real
-endif
+subroutine aq_field_random(self)
+  class(qg_fields), intent(inout) :: self
+  !
+  integer, parameter :: rseed = 7
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec == aq_single) then
+     do ib_var = 1, self%n_vars
+        call normal_distribution(self%fldss(ib_var)%fld(:,:), 0.0_aq_single, 1.0_aq_single, rseed)
+     end do
+  else
+     do ib_var = 1, self%n_vars
+        call normal_distribution(self%fldsd(ib_var)%fld(:,:), 0.0_aq_real, 1.0_aq_real, rseed)
+     end do
+  end if
+  !
+end subroutine aq_field_random
 
-end subroutine qg_fields_zero
-! ------------------------------------------------------------------------------
-!> Set fields to ones
-subroutine qg_fields_ones(self)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self
-
-! Check field
-call qg_fields_check(self)
-
-! Set fields to ones
-if (allocated(self%x)) self%x = 1.0
-if (allocated(self%q)) self%q = 1.0
-if (allocated(self%u)) self%u = 1.0
-if (allocated(self%v)) self%v = 1.0
-if (self%lbc) then
-  self%x_north = 1.0
-  self%x_south = 1.0
-  self%q_north = 1.0
-  self%q_south = 1.0
-endif
-
-end subroutine qg_fields_ones
-! ------------------------------------------------------------------------------
-!> Set fields to Diracs
-subroutine qg_fields_dirac(self,f_conf)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self          !< Fields
-type(fckit_configuration),intent(in) :: f_conf !< FCKIT configuration
-
-! Local variables
-integer :: ndir,idir
-integer,allocatable :: ixdir(:),iydir(:),izdir(:)
-character(len=1) :: var
-character(len=:),allocatable :: str
-
-! Check field
-call qg_fields_check(self)
-
-! Get Diracs size
-ndir = f_conf%get_size('ixdir')
-if ((f_conf%get_size('iydir')/=ndir).or.(f_conf%get_size('izdir')/=ndir)) &
- & call abor1_ftn('qg_fields_dirac: inconsistent sizes for ixdir, iydir and izdir')
-
-! Allocation
-allocate(ixdir(ndir))
-allocate(iydir(ndir))
-allocate(izdir(ndir))
-
-! Get Diracs positions
-call f_conf%get_or_die("ixdir",ixdir)
-call f_conf%get_or_die("iydir",iydir)
-call f_conf%get_or_die("izdir",izdir)
-call f_conf%get_or_die("var",str)
-var = str
-
-! Check Diracs positions
-if (any(ixdir<1).or.any(ixdir>self%geom%nx)) call abor1_ftn('qg_fields_dirac: invalid ixdir')
-if (any(iydir<1).or.any(iydir>self%geom%ny)) call abor1_ftn('qg_fields_dirac: invalid iydir')
-if (any(izdir<1).or.any(izdir>self%geom%nz)) call abor1_ftn('qg_fields_dirac: invalid izdir')
-
-! Setup Diracs
-call qg_fields_zero(self)
-do idir=1,ndir
-  select case (var)
-  case ('x')
-     if (.not.allocated(self%x)) call abor1_ftn('qg_fields_dirac: x should be allocated')
-     self%x(ixdir(idir),iydir(idir),izdir(idir)) = 1.0
-  case ('q')
-     if (.not.allocated(self%q)) call abor1_ftn('qg_fields_dirac: q should be allocated')
-     self%q(ixdir(idir),iydir(idir),izdir(idir)) = 1.0
+subroutine aq_field_copy(self, other)
+  class(qg_fields), intent(inout) :: self
+  class(qg_fields), intent(in)    :: other
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  select case(self%prec)
+  case(aq_single)
+     select case(other%prec)
+     case(aq_single)
+!$omp parallel do
+        do ib_var = 1, self%n_vars
+           call aq_copy(self%locsize, other%fldss(ib_var)%fld, self%fldss(ib_var)%fld)
+        end do
+!$omp end parallel do
+     case default
+        ! Demote
+!$omp parallel do
+        do ib_var = 1, self%n_vars
+           self%fldss(ib_var)%fld(:,:) = real(other%fldsd(ib_var)%fld(:,:),kind=aq_single)
+        end do
+!$omp end parallel do
+     end select
   case default
-     call abor1_ftn('qg_fields_dirac: wrong variable')
-  endselect
-enddo
+     select case(other%prec)
+     case(aq_single)
+        ! Promote
+!$omp parallel do
+        do ib_var = 1, self%n_vars
+           self%fldsd(ib_var)%fld(:,:) = real(other%fldss(ib_var)%fld(:,:),kind=aq_real)
+        end do
+!$omp end parallel do
+     case default
+!$omp parallel do
+        do ib_var = 1, self%n_vars
+           call aq_copy(self%locsize, other%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+        end do
+!$omp end parallel do
+     end select
+  end select
+  !
+end subroutine aq_field_copy
 
-! Complete other fields
-call qg_fields_complete(self,var)
-
-end subroutine qg_fields_dirac
-! ------------------------------------------------------------------------------
-!> Generate random fields
-subroutine qg_fields_random(self,var)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
-character(len=1),intent(in) :: var    !< Variable to randomize ('x' or 'q')
-
-! Check field
-call qg_fields_check(self)
-
-! Set at random value
-select case (var)
-case ('x')
-   if (.not.allocated(self%x)) call abor1_ftn('qg_fields_random: x should be allocated')
-   call normal_distribution(self%x,0.0_kind_real,1.0_kind_real,rseed)
-case ('q')
-   if (.not.allocated(self%q)) call abor1_ftn('qg_fields_random: q should be allocated')
-   call normal_distribution(self%q,0.0_kind_real,1.0_kind_real,rseed)
-case default
-  call abor1_ftn('qg_fields_random: wrong variable')
-endselect
-
-! Complete other fields
-call qg_fields_complete(self,var)
-
-end subroutine qg_fields_random
-! ------------------------------------------------------------------------------
-!> Copy fields
-subroutine qg_fields_copy(self,other)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self   !< Fields
-type(qg_fields),intent(in)    :: other  !< Other fields
-
-! Check resolution
-call qg_fields_check_resolution(self,other)
-
-! Copy 3D field
-if (allocated(self%x).and.allocated(other%x)) self%x = other%x
-if (allocated(self%q).and.allocated(other%q)) self%q = other%q
-if (allocated(self%u).and.allocated(other%u)) self%u = other%u
-if (allocated(self%v).and.allocated(other%v)) self%v = other%v
-
-! Copy LBC
-call qg_fields_copy_lbc(self,other)
-
-end subroutine qg_fields_copy
-! ------------------------------------------------------------------------------
-!> Copy fields LBC
-subroutine qg_fields_copy_lbc(self,other)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self  !< Fields
-type(qg_fields),intent(in)    :: other !< Other fields
-
-! Check resolution
-call qg_fields_check_resolution(self,other)
-
-if (self%lbc) then
-  if (other%lbc) then
-    self%x_north = other%x_north
-    self%x_south = other%x_south
-    self%q_north = other%q_north
-    self%q_south = other%q_south
+subroutine aq_field_self_add(self, other)
+  class(qg_fields), intent(inout) :: self
+  class(qg_fields), intent(in)    :: other
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec /= other%prec) &
+     & call abor1_ftn('aq_field_self_add only allowed for equal precisions')
+  if (self%prec == aq_single) then
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_axpy(self%locsize, 1.0_oops_real, other%fldss(ib_var)%fld, self%fldss(ib_var)%fld)
+     end do
+!$omp end parallel do
   else
-    self%x_north = 0.0_kind_real
-    self%x_south = 0.0_kind_real
-    self%q_north = 0.0_kind_real
-    self%q_south = 0.0_kind_real
-  endif
-endif
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_axpy(self%locsize, 1.0_oops_real, other%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+     end do
+!$omp end parallel do
+  end if
+  !
+end subroutine aq_field_self_add
 
-end subroutine qg_fields_copy_lbc
-! ------------------------------------------------------------------------------
-!> Add fields
-subroutine qg_fields_self_add(self,rhs)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
-type(qg_fields),intent(in)    :: rhs  !< Right-hand side
-
-! Check resolution
-call qg_fields_check_resolution(self,rhs)
-
-! Add field
-if (allocated(self%x).and.allocated(rhs%x)) self%x = self%x + rhs%x
-if (allocated(self%q).and.allocated(rhs%q)) self%q = self%q + rhs%q
-if (allocated(self%u).and.allocated(rhs%u)) self%u = self%u + rhs%u
-if (allocated(self%v).and.allocated(rhs%v)) self%v = self%v + rhs%v
-if (self%lbc.and.rhs%lbc) then
-  self%x_north = self%x_north+rhs%x_north
-  self%x_south = self%x_south+rhs%x_south
-  self%q_north = self%q_north+rhs%q_north
-  self%q_south = self%q_south+rhs%q_south
-endif
-
-end subroutine qg_fields_self_add
-! ------------------------------------------------------------------------------
-!> Subtract fields
-subroutine qg_fields_self_sub(self,rhs)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
-type(qg_fields),intent(in)    :: rhs  !< Right-hand side
-
-! Check resolution
-call qg_fields_check_resolution(self,rhs)
-
-! Subtract field
-if (allocated(self%x).and.allocated(rhs%x)) self%x = self%x - rhs%x
-if (allocated(self%q).and.allocated(rhs%q)) self%q = self%q - rhs%q
-if (allocated(self%u).and.allocated(rhs%u)) self%u = self%u - rhs%u
-if (allocated(self%v).and.allocated(rhs%v)) self%v = self%v - rhs%v
-if (self%lbc.and.rhs%lbc) then
-  self%x_north = self%x_north-rhs%x_north
-  self%x_south = self%x_south-rhs%x_south
-  self%q_north = self%q_north-rhs%q_north
-  self%q_south = self%q_south-rhs%q_south
-endif
-
-end subroutine qg_fields_self_sub
-! ------------------------------------------------------------------------------
-!> Multiply fields by a scalar
-subroutine qg_fields_self_mul(self,zz)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
-real(kind_real),intent(in) :: zz      !< Multiplier
-
-! Check field
-call qg_fields_check(self)
-
-! Multiply with a scalar
-if (allocated(self%x)) self%x = zz * self%x
-if (allocated(self%q)) self%q = zz * self%q
-if (allocated(self%u)) self%u = zz * self%u
-if (allocated(self%v)) self%v = zz * self%v
-if (self%lbc) then
-  self%x_north = zz*self%x_north
-  self%x_south = zz*self%x_south
-  self%q_north = zz*self%q_north
-  self%q_south = zz*self%q_south
-endif
-
-end subroutine qg_fields_self_mul
-! ------------------------------------------------------------------------------
-!> Apply axpy operator to fields
-subroutine qg_fields_axpy(self,zz,rhs)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
-real(kind_real),intent(in) :: zz      !< Multiplier
-type(qg_fields),intent(in) :: rhs     !< Right-hand side
-
-! Check resolution
-call qg_fields_check_resolution(self,rhs)
-
-! Apply apxy
-if (allocated(self%x).and.allocated(rhs%x)) self%x = self%x + zz * rhs%x
-if (allocated(self%q).and.allocated(rhs%q)) self%q = self%q + zz * rhs%q
-if (allocated(self%u).and.allocated(rhs%u)) self%u = self%u + zz * rhs%u
-if (allocated(self%v).and.allocated(rhs%v)) self%v = self%v + zz * rhs%v
-if (self%lbc.and.rhs%lbc) then
-  self%x_north = self%x_north+zz*rhs%x_north
-  self%x_south = self%x_south+zz*rhs%x_south
-  self%q_north = self%q_north+zz*rhs%q_north
-  self%q_south = self%q_south+zz*rhs%q_south
-endif
-
-end subroutine qg_fields_axpy
-! ------------------------------------------------------------------------------
-!> Schur product of fields
-subroutine qg_fields_self_schur(self,rhs)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
-type(qg_fields),intent(in)    :: rhs  !< Right-hand side
-
-! Check resolution
-call qg_fields_check_resolution(self,rhs)
-
-! Schur product
-if (allocated(self%x).and.allocated(rhs%x)) self%x = self%x * rhs%x
-if (allocated(self%q).and.allocated(rhs%q)) self%q = self%q * rhs%q
-if (allocated(self%u).and.allocated(rhs%u)) self%u = self%u * rhs%u
-if (allocated(self%v).and.allocated(rhs%v)) self%v = self%v * rhs%v
-if (self%lbc.and.rhs%lbc) then
-  self%x_north = self%x_north*rhs%x_north
-  self%x_south = self%x_south*rhs%x_south
-  self%q_north = self%q_north*rhs%q_north
-  self%q_south = self%q_south*rhs%q_south
-endif
-
-end subroutine qg_fields_self_schur
-! ------------------------------------------------------------------------------
-!> Compute dot product for fields
-subroutine qg_fields_dot_prod(fld1,fld2,zprod)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld1   !< First fields
-type(qg_fields),intent(in) :: fld2   !< Second fields
-real(kind_real),intent(out) :: zprod !< Dot product
-
-! Check resolution
-call qg_fields_check_resolution(fld1,fld2)
-
-! Compute dot product
-zprod = 0.0_kind_real
-if (allocated(fld1%x).and.allocated(fld2%x)) zprod = zprod+sum(fld1%x*fld2%x)
-if (allocated(fld1%q).and.allocated(fld2%q)) zprod = zprod+sum(fld1%q*fld2%q)
-if (allocated(fld1%u).and.allocated(fld2%u)) zprod = zprod+sum(fld1%u*fld2%u)
-if (allocated(fld1%v).and.allocated(fld2%v)) zprod = zprod+sum(fld1%v*fld2%v)
-
-end subroutine qg_fields_dot_prod
-! ------------------------------------------------------------------------------
-!> Add increment to fields
-subroutine qg_fields_add_incr(self,rhs)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
-type(qg_fields),intent(in)    :: rhs  !< Right-hand side
-
-! Check fields
-call qg_fields_check(self)
-call qg_fields_check(rhs)
-
-if ((self%geom%nx==rhs%geom%nx).and.(self%geom%ny==rhs%geom%ny).and.(self%geom%nz==rhs%geom%nz)) then
-  ! Same resolution
-  if (allocated(self%x).and.allocated(rhs%x)) self%x = self%x + rhs%x
-  if (allocated(self%q).and.allocated(rhs%q)) self%q = self%q + rhs%q
-  if (allocated(self%u).and.allocated(rhs%u)) self%u = self%u + rhs%u
-  if (allocated(self%v).and.allocated(rhs%v)) self%v = self%v + rhs%v
-else
-  ! Different resolutions
-  call abor1_ftn('qg_fields_add_incr: not coded for low res increment yet')
-endif
-
-end subroutine qg_fields_add_incr
-! ------------------------------------------------------------------------------
-!> Compute increment from the difference of two fields
-subroutine qg_fields_diff_incr(lhs,fld1,fld2)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: lhs !< Left-hand side
-type(qg_fields),intent(in) :: fld1   !< First fields
-type(qg_fields),intent(in) :: fld2   !< Second fields
-
-! Check resolution
-call qg_fields_check_resolution(fld1,fld2)
-call qg_fields_check(lhs)
-
-! Initialization
-call qg_fields_zero(lhs)
-
-if ((fld1%geom%nx==lhs%geom%nx).and.(fld1%geom%ny==lhs%geom%ny).and.(fld1%geom%nz==lhs%geom%nz)) then
-  ! Same resolution
-  if (allocated(lhs%x).and.allocated(fld1%x)) lhs%x = fld1%x - fld2%x
-  if (allocated(lhs%q).and.allocated(fld1%q)) lhs%q = fld1%q - fld2%q
-  if (allocated(lhs%u).and.allocated(fld1%u)) lhs%u = fld1%u - fld2%u
-  if (allocated(lhs%v).and.allocated(fld1%v)) lhs%v = fld1%v - fld2%v
-else
-  ! Different resolutions
-  call abor1_ftn('qg_fields_diff_incr: not coded for low res increment yet')
-endif
-
-end subroutine qg_fields_diff_incr
-! ------------------------------------------------------------------------------
-!> Change fields resolution
-subroutine qg_fields_change_resol(fld,rhs)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: fld !< Fields
-type(qg_fields),intent(in)    :: rhs !< Right-hand side
-
-integer :: ix,iy,iz
-real(kind_real), allocatable, dimension(:,:,:) :: q1, q2
-
-if ((fld%geom%nx==rhs%geom%nx).and.(fld%geom%ny==rhs%geom%ny).and.(fld%geom%nz==rhs%geom%nz)) then
-  ! Same resolution
-   call qg_fields_copy(fld,rhs)
-else
-  ! Trilinear interpolation
-  do ix=1,fld%geom%nx
-    do iy=1,fld%geom%ny
-      do iz=1,fld%geom%nz
-        if (allocated(rhs%x).and.allocated(fld%x)) then
-          call qg_interp_trilinear(rhs%geom,fld%geom%lon(ix,iy),fld%geom%lat(ix,iy),fld%geom%z(iz), &
-                                   rhs%x,fld%x(ix,iy,iz))
-        endif
-        if (allocated(rhs%q).and.allocated(fld%q)) then
-          call qg_interp_trilinear(rhs%geom,fld%geom%lon(ix,iy),fld%geom%lat(ix,iy),fld%geom%z(iz), &
-                                   rhs%q,fld%q(ix,iy,iz))
-        endif
-        if (allocated(rhs%u).and.allocated(fld%u)) then
-          call qg_interp_trilinear(rhs%geom,fld%geom%lon(ix,iy),fld%geom%lat(ix,iy),fld%geom%z(iz), &
-                                   rhs%u,fld%u(ix,iy,iz))
-        endif
-        if (allocated(rhs%v).and.allocated(fld%v)) then
-          call qg_interp_trilinear(rhs%geom,fld%geom%lon(ix,iy),fld%geom%lat(ix,iy),fld%geom%z(iz), &
-                                   rhs%v,fld%v(ix,iy,iz))
-        endif
-      enddo
-    enddo
-  enddo
-
-  ! Deal with boundary conditions
-  if (fld%lbc) then
-    if (rhs%lbc) then
-      allocate(q1(rhs%geom%nx,rhs%geom%ny,rhs%geom%nz))
-      allocate(q2(fld%geom%nx,fld%geom%ny,fld%geom%nz))
-      do iy=1,rhs%geom%ny
-        q1(:,iy,:) = rhs%q_south
-      enddo
-      do ix=1,fld%geom%nx
-        do iz=1,fld%geom%nz
-          call qg_interp_trilinear(rhs%geom,fld%geom%lon(ix,1),fld%geom%lat(ix,1),fld%geom%z(iz),q1,q2(ix,1,iz) )
-        enddo
-      enddo
-      fld%q_south = q2(:,1,:)
-      do iy=1,rhs%geom%ny
-        q1(:,iy,:) = rhs%q_north
-      enddo
-      do ix=1,fld%geom%nx
-        do iz=1,fld%geom%nz
-          call qg_interp_trilinear(rhs%geom,fld%geom%lon(ix,1),fld%geom%lat(ix,1),fld%geom%z(iz),q1,q2(ix,1,iz))
-        enddo
-      enddo
-      fld%q_north = q2(:,1,:)
-      deallocate(q1,q2)
-      fld%x_north = rhs%x_north
-      fld%x_south = rhs%x_south
-    else
-      fld%x_north = 0.0_kind_real
-      fld%x_south = 0.0_kind_real
-      fld%q_north = 0.0_kind_real
-      fld%q_south = 0.0_kind_real
-    endif
-  endif
-endif
-
-end subroutine qg_fields_change_resol
-! ------------------------------------------------------------------------------
-!> Read fields from file
-subroutine qg_fields_read_file(fld,f_conf,vdate)
-use string_utils
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: fld           !< Fields
-type(fckit_configuration),intent(in) :: f_conf !< FCKIT configuration
-type(datetime),intent(inout) :: vdate          !< Date and time
-
-! Local variables
-integer :: iread,nx,ny,nz,bc
-integer :: ncid,nx_id,ny_id,nz_id,x_id,q_id,u_id,v_id,x_north_id,x_south_id,q_north_id,q_south_id
-logical :: lbc
-character(len=20) :: sdate
-character(len=1024) :: record,filename
-character(len=:),allocatable :: str
-
-! Check field
-call qg_fields_check(fld)
-
-! Check whether the field should be invented or read from file
-iread = 1
-if (f_conf%has("read_from_file")) call f_conf%get_or_die("read_from_file",iread)
-
-if (iread==0) then
-  ! Invent field
-  call fckit_log%warning('qg_fields_read_file: inventing field')
-  call qg_fields_analytic_init(fld,f_conf,vdate)
-else
-  ! Read field from file
-
-  ! Get filename
-  call f_conf%get_or_die("filename",str)
-  call swap_name_member(f_conf, str)
-  filename = str
-  call fckit_log%info('qg_fields_read_file: opening '//trim(filename))
-
-  ! Initialize field
-  call qg_fields_zero(fld)
-
-  ! Open NetCDF file
-  call ncerr(nf90_open(trim(filename),nf90_nowrite,ncid))
-
-  ! Get dimensions ids
-  call ncerr(nf90_inq_dimid(ncid,'nx',nx_id))
-  call ncerr(nf90_inq_dimid(ncid,'ny',ny_id))
-  call ncerr(nf90_inq_dimid(ncid,'nz',nz_id))
-
-  ! Get dimensions
-  call ncerr(nf90_inquire_dimension(ncid,nx_id,len=nx))
-  call ncerr(nf90_inquire_dimension(ncid,ny_id,len=ny))
-  call ncerr(nf90_inquire_dimension(ncid,nz_id,len=nz))
-
-  ! Test dimensions consistency with the field geometry
-  if ((nx/=fld%geom%nx).or.(ny/=fld%geom%ny).or.(nz/=fld%geom%nz)) then
-    write (record,*) 'qg_fields_read_file: input fields have wrong dimensions: ',nx,ny,nz
-    call fckit_log%error(record)
-    write (record,*) 'qg_fields_read_file: expected: ',fld%geom%nx,fld%geom%ny,fld%geom%nz
-    call fckit_log%error(record)
-    call abor1_ftn('qg_fields_read_file: input fields have wrong dimensions')
-  endif
-
-  ! Get attributes
-  call ncerr(nf90_get_att(ncid,nf90_global,'bc',bc))
-  if (bc==0) then
-    lbc = .false.
-  elseif (bc==1) then
-    lbc = .true.
+subroutine aq_field_self_sub(self, other)
+  class(qg_fields), intent(inout) :: self
+  class(qg_fields), intent(in)    :: other
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec /= other%prec) &
+     & call abor1_ftn('aq_field_self_sub only allowed for equal precisions')
+  if (self%prec == aq_single) then
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_axpy(self%locsize, -1.0_oops_real, other%fldss(ib_var)%fld, self%fldss(ib_var)%fld)
+     end do
+!$omp end parallel do
   else
-    call abor1_ftn('qg_fields_read_file: wrong bc value')
-  endif
-  call ncerr(nf90_get_att(ncid,nf90_global,'sdate',sdate))
-
-  ! Test attributes consistency with the field
-  if ((.not.lbc).and.fld%lbc) call abor1_ftn('qg_fields_read_file: LBC are missing in NetCDF file')
-
-  ! Get variables ids
-  if (allocated(fld%x)) call ncerr(nf90_inq_varid(ncid,'x',x_id))
-  if (allocated(fld%q)) call ncerr(nf90_inq_varid(ncid,'q',q_id))
-  if (allocated(fld%u)) call ncerr(nf90_inq_varid(ncid,'u',u_id))
-  if (allocated(fld%v)) call ncerr(nf90_inq_varid(ncid,'v',v_id))
-  if (fld%lbc) then
-    call ncerr(nf90_inq_varid(ncid,'x_north',x_north_id))
-    call ncerr(nf90_inq_varid(ncid,'x_south',x_south_id))
-    call ncerr(nf90_inq_varid(ncid,'q_north',q_north_id))
-    call ncerr(nf90_inq_varid(ncid,'q_south',q_south_id))
-  endif
-
-  ! Get variables
-  if (allocated(fld%x)) call ncerr(nf90_get_var(ncid,x_id,fld%x))
-  if (allocated(fld%q)) call ncerr(nf90_get_var(ncid,q_id,fld%q))
-  if (allocated(fld%u)) call ncerr(nf90_get_var(ncid,u_id,fld%u))
-  if (allocated(fld%v)) call ncerr(nf90_get_var(ncid,v_id,fld%v))
-  if (fld%lbc) then
-    call ncerr(nf90_get_var(ncid,x_north_id,fld%x_north))
-    call ncerr(nf90_get_var(ncid,x_south_id,fld%x_south))
-    call ncerr(nf90_get_var(ncid,q_north_id,fld%q_north))
-    call ncerr(nf90_get_var(ncid,q_south_id,fld%q_south))
-  endif
-
-  ! Close NetCDF file
-  call ncerr(nf90_close(ncid))
-
-  ! Set date
-  call fckit_log%info('qg_fields_read_file: validity date is '//sdate)
-  call datetime_set(sdate,vdate)
-endif
-
-! Check field
-call qg_fields_check(fld)
-
-end subroutine qg_fields_read_file
-! ------------------------------------------------------------------------------
-!> Write fields to file
-subroutine qg_fields_write_file(fld,f_conf,vdate)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld              !< Fields
-type(fckit_configuration),intent(in) :: f_conf !< FCKIT configuration
-type(datetime),intent(in) :: vdate             !< Date and time
-
-! Local variables
-integer :: ncid,nx_id,ny_id,nz_id,lon_id,lat_id,z_id,area_id,heat_id,x_id,q_id,u_id,v_id
-integer :: x_north_id,x_south_id,q_north_id,q_south_id
-integer :: info
-character(len=20) :: sdate
-character(len=1024) :: filename
-type(oops_variables) :: vars
-type(qg_fields) :: fld_io
-
-! Check field
-call qg_fields_check(fld)
-
-! Get all variables
-vars = oops_variables()
-call vars%push_back('x')
-call vars%push_back('q')
-call vars%push_back('u')
-call vars%push_back('v')
-call qg_fields_create(fld_io,fld%geom,vars,.true.)
-call qg_fields_copy_lbc(fld_io,fld)
-if (allocated(fld%x)) then
-  fld_io%x = fld%x
-  call qg_fields_complete(fld_io,'x')
-elseif (allocated(fld%q)) then
-  fld_io%q = fld%q
-  call qg_fields_complete(fld_io,'q')
-else
-  call abor1_ftn('qg_fields_write_file: x or q required')
-endif
-
-! Set filename
-filename = genfilename(f_conf,800,vdate)
-call fckit_log%info('qg_fields_write_file: writing '//trim(filename))
-
-! Set date
-call datetime_to_string(vdate,sdate)
-
-! Create NetCDF file
-call ncerr(nf90_create(trim(filename),or(nf90_clobber,nf90_64bit_offset),ncid))
-
-! Define dimensions
-call ncerr(nf90_def_dim(ncid,'nx',fld%geom%nx,nx_id))
-call ncerr(nf90_def_dim(ncid,'ny',fld%geom%ny,ny_id))
-call ncerr(nf90_def_dim(ncid,'nz',fld%geom%nz,nz_id))
-
-! Define attributes
-if (fld%lbc) then
-  call ncerr(nf90_put_att(ncid,nf90_global,'bc',1))
-else
-  call ncerr(nf90_put_att(ncid,nf90_global,'bc',0))
-endif
-call ncerr(nf90_put_att(ncid,nf90_global,'sdate',sdate))
-
-! Define variables
-call ncerr(nf90_def_var(ncid,'lon',nf90_double,(/nx_id,ny_id/),lon_id))
-call ncerr(nf90_def_var(ncid,'lat',nf90_double,(/nx_id,ny_id/),lat_id))
-call ncerr(nf90_def_var(ncid,'z',nf90_double,(/nz_id/),z_id))
-call ncerr(nf90_def_var(ncid,'area',nf90_double,(/nx_id,ny_id/),area_id))
-call ncerr(nf90_def_var(ncid,'heat',nf90_double,(/nx_id,ny_id/),heat_id))
-call ncerr(nf90_def_var(ncid,'x',nf90_double,(/nx_id,ny_id,nz_id/),x_id))
-call ncerr(nf90_put_att(ncid,x_id,'_FillValue',missing_value(1.0_kind_real)))
-call ncerr(nf90_def_var(ncid,'q',nf90_double,(/nx_id,ny_id,nz_id/),q_id))
-call ncerr(nf90_put_att(ncid,q_id,'_FillValue',missing_value(1.0_kind_real)))
-call ncerr(nf90_def_var(ncid,'u',nf90_double,(/nx_id,ny_id,nz_id/),u_id))
-call ncerr(nf90_put_att(ncid,u_id,'_FillValue',missing_value(1.0_kind_real)))
-call ncerr(nf90_def_var(ncid,'v',nf90_double,(/nx_id,ny_id,nz_id/),v_id))
-call ncerr(nf90_put_att(ncid,v_id,'_FillValue',missing_value(1.0_kind_real)))
-if (fld%lbc) then
-  call ncerr(nf90_def_var(ncid,'x_north',nf90_double,(/nz_id/),x_north_id))
-  call ncerr(nf90_put_att(ncid,x_north_id,'_FillValue',missing_value(1.0_kind_real)))
-  call ncerr(nf90_def_var(ncid,'x_south',nf90_double,(/nz_id/),x_south_id))
-  call ncerr(nf90_put_att(ncid,x_south_id,'_FillValue',missing_value(1.0_kind_real)))
-  call ncerr(nf90_def_var(ncid,'q_north',nf90_double,(/nx_id,nz_id/),q_north_id))
-  call ncerr(nf90_put_att(ncid,q_north_id,'_FillValue',missing_value(1.0_kind_real)))
-  call ncerr(nf90_def_var(ncid,'q_south',nf90_double,(/nx_id,nz_id/),q_south_id))
-  call ncerr(nf90_put_att(ncid,q_south_id,'_FillValue',missing_value(1.0_kind_real)))
-endif
-
-! End definitions
-call ncerr(nf90_enddef(ncid))
-
-! Put variables
-call ncerr(nf90_put_var(ncid,lon_id,fld%geom%lon))
-call ncerr(nf90_put_var(ncid,lat_id,fld%geom%lat))
-call ncerr(nf90_put_var(ncid,z_id,fld%geom%z))
-call ncerr(nf90_put_var(ncid,area_id,fld%geom%area))
-call ncerr(nf90_put_var(ncid,heat_id,fld%geom%heat))
-call ncerr(nf90_put_var(ncid,x_id,fld_io%x))
-call ncerr(nf90_put_var(ncid,q_id,fld_io%q))
-call ncerr(nf90_put_var(ncid,u_id,fld_io%u))
-call ncerr(nf90_put_var(ncid,v_id,fld_io%v))
-if (fld%lbc) then
-  call ncerr(nf90_put_var(ncid,x_north_id,fld%x_north))
-  call ncerr(nf90_put_var(ncid,x_south_id,fld%x_south))
-  call ncerr(nf90_put_var(ncid,q_north_id,fld%q_north))
-  call ncerr(nf90_put_var(ncid,q_south_id,fld%q_south))
-endif
-
-! Close NetCDF file
-call ncerr(nf90_close(ncid))
-
-! Release memory
-call vars%destruct()
-
-end subroutine qg_fields_write_file
-! ------------------------------------------------------------------------------
-!> Analytic initialization of fields
-subroutine qg_fields_analytic_init(fld,f_conf,vdate)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: fld           !< Fields
-type(fckit_configuration),intent(in) :: f_conf !< FCKIT configuration
-type(datetime),intent(inout) :: vdate          !< Date and time
-
-! Local variables
-integer :: ix,iy,iz
-real(kind_real) :: uval
-real(kind_real),allocatable :: x(:,:,:),q(:,:,:)
-character(len=30) :: ic
-character(len=20) :: sdate
-character(len=:),allocatable :: str
-
-! Check configuration
-if (f_conf%has("analytic_init")) then
-  call f_conf%get_or_die("analytic_init",str)
-  ic = str
-else
-  ic = 'baroclinic-instability'
-endif
-call fckit_log%warning('qg_fields_analytic_init: '//trim(ic))
-
-! Set date
-call f_conf%get_or_die("date",str)
-sdate = str
-call fckit_log%info('qg_fields_analytic_init: validity date is '//sdate)
-call datetime_set(sdate,vdate)
-
-! Check boundaries
-if (.not.fld%lbc) call abor1_ftn('qg_fields_analytic_init: boundaries required')
-
-! Allocation
-allocate(x(fld%geom%nx,fld%geom%ny,fld%geom%nz))
-allocate(q(fld%geom%nx,fld%geom%ny,fld%geom%nz))
-
-! Define state
-select case (trim(ic))
-case ('baroclinic-instability')
-  ! Baroclinic instability
-  do iz=1,fld%geom%nz
-    do iy=1,fld%geom%ny
-      do ix=1,fld%geom%nx
-        call baroclinic_instability(fld%geom%x(ix),fld%geom%y(iy),fld%geom%z(iz),'x',x(ix,iy,iz))
-      enddo
-    enddo
-    call baroclinic_instability(0.0_kind_real,domain_meridional,fld%geom%z(iz),'x',fld%x_north(iz))
-    call baroclinic_instability(0.0_kind_real,0.0_kind_real,fld%geom%z(iz),'x',fld%x_south(iz))
-  enddo
-case ('large-vortices')
-  ! Large vortices
-  do iz=1,fld%geom%nz
-    do iy=1,fld%geom%ny
-      do ix=1,fld%geom%nx
-        call large_vortices(fld%geom%x(ix),fld%geom%y(iy),fld%geom%z(iz),'x',x(ix,iy,iz))
-      enddo
-    enddo
-    call large_vortices(0.0_kind_real,domain_meridional,fld%geom%z(iz),'x',fld%x_north(iz))
-    call large_vortices(0.0_kind_real,0.0_kind_real,fld%geom%z(iz),'x',fld%x_south(iz))
-  enddo
-case ('uniform_field')
-  ! Uniform field
-  call f_conf%get_or_die("uval",uval)
-  x = uval
-case default
-  call abor1_ftn('qg_fields_analytic_init: unknown initialization')
-endselect
-
-! Compute q
-call convert_x_to_q(fld%geom,x,fld%x_north,fld%x_south,q)
-do iz=1,fld%geom%nz
-  do ix=1,fld%geom%nx
-    fld%q_south(ix,iz) = 2.0*q(ix,1,iz)-q(ix,2,iz)
-  enddo
-  do ix=1,fld%geom%nx
-    fld%q_north(ix,iz) = 2.0*q(ix,fld%geom%ny,iz)-q(ix,fld%geom%ny-1,iz)
-  enddo
-enddo
-
-! Copy 3d field and ensure consistency
-if (allocated(x)) then
-  fld%x = x
-  call qg_fields_complete(fld,'x')
-elseif (allocated(q)) then
-  fld%q = q
-  call qg_fields_complete(fld,'q')
-else
-  call abor1_ftn('qg_fields_analytic_init: x or q required')
-endif
-
-! Check field
-call qg_fields_check(fld)
-
-end subroutine qg_fields_analytic_init
-! ------------------------------------------------------------------------------
-!> Fields statistics
-subroutine qg_fields_gpnorm(fld,vpresent,vmin,vmax,vrms)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld        !< Fields
-integer,intent(inout) :: vpresent(6)     !< Variables presence flag
-real(kind_real),intent(inout) :: vmin(6) !< Variables minimum
-real(kind_real),intent(inout) :: vmax(6) !< Variables maximum
-real(kind_real),intent(inout) :: vrms(6) !< Variables RMS
-
-! Check field
-call qg_fields_check(fld)
-
-! Initialization
-vpresent = 0
-vmin = 0.0_kind_real
-vmax = 0.0_kind_real
-vrms = 0.0_kind_real
-
-! 3d fields
-if (allocated(fld%x)) then
-  vpresent(1) = 1
-  vmin(1) = minval(fld%x)
-  vmax(1) = maxval(fld%x)
-  vrms(1) = sqrt(sum(fld%x**2)/real(fld%geom%nx*fld%geom%ny*fld%geom%nz,kind_real))
-endif
-if (allocated(fld%q)) then
-  vpresent(2) = 1
-  vmin(2) = minval(fld%q)
-  vmax(2) = maxval(fld%q)
-  vrms(2) = sqrt(sum(fld%q**2)/real(fld%geom%nx*fld%geom%ny*fld%geom%nz,kind_real))
-endif
-if (allocated(fld%u)) then
-  vpresent(3) = 1
-  vmin(3) = minval(fld%u)
-  vmax(3) = maxval(fld%u)
-  vrms(3) = sqrt(sum(fld%u**2)/real(fld%geom%nx*fld%geom%ny*fld%geom%nz,kind_real))
-endif
-if (allocated(fld%v)) then
-  vpresent(4) = 1
-  vmin(4) = minval(fld%v)
-  vmax(4) = maxval(fld%v)
-  vrms(4) = sqrt(sum(fld%v**2)/real(fld%geom%nx*fld%geom%ny*fld%geom%nz,kind_real))
-endif
-
-! Boundaries
-if (fld%lbc) then
-  ! Streamfunction
-  vpresent(5) = 1
-  vmin(5) = min(minval(fld%x_north),minval(fld%x_south))
-  vmax(5) = max(maxval(fld%x_north),maxval(fld%x_south))
-  vrms(5) = sqrt(sum(fld%x_north**2+fld%x_south**2)/real(2*fld%geom%nz,kind_real))
-
-  ! Potential vorticity
-  vpresent(6) = 1
-  vmin(6) = min(minval(fld%q_north),minval(fld%q_south))
-  vmax(6) = max(maxval(fld%q_north),maxval(fld%q_south))
-  vrms(6) = sqrt(sum(fld%q_north**2+fld%q_south**2)/real(2*fld%geom%nx*fld%geom%nz,kind_real))
-endif
-
-end subroutine qg_fields_gpnorm
-! ------------------------------------------------------------------------------
-!> Fields RMS
-subroutine qg_fields_rms(fld,prms)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld   !< Fields
-real(kind_real),intent(out) :: prms !< RMS
-
-! Local variables
-integer :: norm
-
-! Check field
-call qg_fields_check(fld)
-
-! Initialization
-prms = 0.0_kind_real
-norm = 0.0_kind_real
-
-! 3d fields
-if (allocated(fld%x)) then
-   prms = prms+sum(fld%x**2)
-   norm = norm+real(fld%geom%nx*fld%geom%ny*fld%geom%nz,kind_real)
-endif
-if (allocated(fld%q)) then
-   prms = prms+sum(fld%q**2)
-   norm = norm+real(fld%geom%nx*fld%geom%ny*fld%geom%nz,kind_real)
-endif
-if (allocated(fld%u)) then
-   prms = prms+sum(fld%u**2)
-   norm = norm+real(fld%geom%nx*fld%geom%ny*fld%geom%nz,kind_real)
-endif
-if (allocated(fld%v)) then
-   prms = prms+sum(fld%v**2)
-   norm = norm+real(fld%geom%nx*fld%geom%ny*fld%geom%nz,kind_real)
-endif
-
-! Boundaries
-if (fld%lbc) then
-  prms = prms+sum(fld%x_north**2+fld%x_south**2)+sum(fld%q_north**2+fld%q_south**2)
-  norm = norm+real(2*(1+fld%geom%nx)*fld%geom%nz,kind_real)
-endif
-
-! Normalize and square-root
-prms = sqrt(prms/norm)
-
-end subroutine qg_fields_rms
-! ------------------------------------------------------------------------------
-!> Get fields geometry
-subroutine qg_fields_sizes(fld,nx,ny,nz)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld !< Fields
-integer,intent(out) :: nx         !< X size
-integer,intent(out) :: ny         !< Y size
-integer,intent(out) :: nz         !< Z size
-
-! Copy sizes
-nx = fld%geom%nx
-ny = fld%geom%ny
-nz = fld%geom%nz
-
-end subroutine qg_fields_sizes
-! ------------------------------------------------------------------------------
-!> Get LBC presence
-subroutine qg_fields_lbc(fld,lbc)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld !< Fields
-integer,intent(out) :: lbc        !< LBC presence
-
-! Check field
-call qg_fields_check(fld)
-
-if (fld%lbc) then
-  lbc = 1
-else
-  lbc = 0
-endif
-
-end subroutine qg_fields_lbc
-! ------------------------------------------------------------------------------
-!> Set ATLAS field
-subroutine qg_fields_set_atlas(self,vars,afieldset)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: self              !< Fields
-type(oops_variables),intent(in) :: vars         !< List of variables
-type(atlas_fieldset),intent(inout) :: afieldset !< ATLAS fieldset
-
-! Local variables
-integer :: jvar
-character(len=1024) :: fieldname
-type(atlas_field) :: afield
-
-! Get or create field
-do jvar=1,vars%nvars()
-   fieldname = vars%variable(jvar)
-   if (afieldset%has_field(trim(fieldname))) then
-     ! Get afield
-     afield = afieldset%field(trim(fieldname))
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_axpy(self%locsize, -1.0_oops_real, other%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+     end do
+!$omp end parallel do
+  end if
+  !
+end subroutine aq_field_self_sub
+
+subroutine aq_field_self_mul(self, coeff)
+  class(qg_fields), intent(inout) :: self
+  real(oops_real),    intent(in)    :: coeff
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec == aq_single) then
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_scal(self%locsize, coeff, self%fldss(ib_var)%fld)
+     end do
+!$omp end parallel do
+  else
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_scal(self%locsize, coeff, self%fldsd(ib_var)%fld)
+     end do
+!$omp end parallel do
+  end if
+  !
+end subroutine aq_field_self_mul
+
+subroutine aq_field_add_incr(self, incr)
+  class(qg_fields), intent(inout) :: self
+  class(qg_fields), intent(in)    :: incr
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec == aq_single .or. incr%prec == aq_single) &
+     & call abor1_ftn('aq_field_add_incr not implemented for single precision')
+!$omp parallel do
+  do ib_var = 1, self%n_vars
+     call aq_axpy(self%locsize, 1.0_oops_real, incr%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+  end do
+!$omp end parallel do
+  !
+end subroutine aq_field_add_incr
+
+subroutine aq_field_diff_incr(self, fld1, fld2)
+  class(qg_fields), intent(inout) :: self
+  class(qg_fields), intent(in)    :: fld1
+  class(qg_fields), intent(in)    :: fld2
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec == aq_single .or. fld1%prec == aq_single .or. fld2%prec == aq_single) &
+     & call abor1_ftn('aq_field_diff_incr not implemented for single precision')
+!$omp parallel do
+  do ib_var = 1, self%n_vars
+     call aq_copy(self%locsize, fld1%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+     call aq_axpy(self%locsize, -1.0_oops_real, fld2%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+  end do
+!$omp end parallel do
+  !
+end subroutine aq_field_diff_incr
+
+subroutine aq_field_self_axpy(self, coeff, other)
+  class(qg_fields), intent(inout) :: self
+  real(oops_real),  intent(in)    :: coeff
+  class(qg_fields), intent(in)    :: other
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec /= other%prec) &
+     & call abor1_ftn('aq_field_self_axpy only allowed for equal precisions')
+  if (self%prec == aq_single) then
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_axpy(self%locsize, coeff, other%fldss(ib_var)%fld, self%fldss(ib_var)%fld)
+     end do
+!$omp end parallel do
+  else
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_axpy(self%locsize, coeff, other%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+     end do
+!$omp end parallel do
+  end if
+  !
+end subroutine aq_field_self_axpy
+
+subroutine aq_field_self_schur(self, other)
+  class(qg_fields), intent(inout) :: self
+  class(qg_fields), intent(in)    :: other
+  !
+  integer(atlas_kind_idx) :: ib_var
+  !
+  if (self%prec == aq_single) then
+     if (other%prec == aq_single) then
+!$omp parallel do
+        do ib_var = 1, self%n_vars
+           self%fldss(ib_var)%fld(:,:) = self%fldss(ib_var)%fld(:,:) * other%fldss(ib_var)%fld(:,:)
+        end do
+!$omp end parallel do
+     else
+!$omp parallel do
+        do ib_var = 1, self%n_vars
+           self%fldss(ib_var)%fld(:,:) = self%fldss(ib_var)%fld(:,:) * other%fldsd(ib_var)%fld(:,:)
+        end do
+!$omp end parallel do
+     end if
+  else
+     if (other%prec == aq_single) then
+!$omp parallel do
+        do ib_var = 1, self%n_vars
+           self%fldsd(ib_var)%fld(:,:) = self%fldsd(ib_var)%fld(:,:) * other%fldss(ib_var)%fld(:,:)
+        end do
+!$omp end parallel do
+     else
+!$omp parallel do
+        do ib_var = 1, self%n_vars
+           self%fldsd(ib_var)%fld(:,:) = self%fldsd(ib_var)%fld(:,:) * other%fldsd(ib_var)%fld(:,:)
+        end do
+!$omp end parallel do
+     end if
+  end if
+  !
+end subroutine aq_field_self_schur
+
+subroutine aq_field_dot_prod_with(self, other, zprod)
+  class(qg_fields), intent(inout) :: self
+  class(qg_fields), intent(inout) :: other
+  real(oops_real),    intent(out) :: zprod
+  !
+  integer(atlas_kind_idx) :: ib_i, ib_j, ib_k, ib_var
+  !
+  if (self%prec /= other%prec) &
+     & call abor1_ftn('aq_field_dot_prod_with only allowed for equal precisions')
+  !
+  call self%halo_exchange()
+  call other%halo_exchange()
+  !
+  if (self%geom%halo > 0) then
+     zprod = 0.0_oops_real
+     if (self%prec == aq_single) then
+!$omp parallel do reduction(+:zprod) private(ib_j, ib_i, ib_k)
+        do ib_var = 1, self%n_vars
+           do ib_j = self%geom%fs_3d%j_begin(), self%geom%fs_3d%j_end()
+              do ib_i = self%geom%fs_3d%i_begin(ib_j), self%geom%fs_3d%i_end(ib_j)
+                 do ib_k = 1, self%geom%levels
+                    zprod = zprod + &
+                       &    self%fldss(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j)) * &
+                       &    other%fldss(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))
+                 end do
+              end do
+           end do
+        end do
+!$omp end parallel do
+     else
+!$omp parallel do reduction(+:zprod) private(ib_j, ib_i, ib_k)
+        do ib_var = 1, self%n_vars
+           do ib_j = self%geom%fs_3d%j_begin(), self%geom%fs_3d%j_end()
+              do ib_i = self%geom%fs_3d%i_begin(ib_j), self%geom%fs_3d%i_end(ib_j)
+                 do ib_k = 1, self%geom%levels
+                    zprod = zprod + &
+                       &    self%fldsd(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j)) * &
+                       &    other%fldsd(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))
+                 end do
+              end do
+           end do
+        end do
+!$omp end parallel do
+     end if
+  else
+     zprod = 0.0_oops_real
+     if (self%prec == aq_single) then
+!$omp parallel do reduction(+:zprod)
+        do ib_var = 1, self%n_vars
+           zprod = zprod + aq_dot_product(self%locsize, self%fldss(ib_var)%fld, other%fldss(ib_var)%fld)
+        end do
+!$omp end parallel do
+     else
+!$omp parallel do reduction(+:zprod)
+        do ib_var = 1, self%n_vars
+           zprod = zprod + aq_dot_product(self%locsize, self%fldsd(ib_var)%fld, other%fldsd(ib_var)%fld)
+        end do
+!$omp end parallel do
+     end if
+  end if
+  call self%fmpi%allreduce(zprod,fckit_mpi_sum())
+  !
+end subroutine aq_field_dot_prod_with
+
+subroutine aq_field_norm2(self, norm)
+  class(qg_fields), intent(inout) :: self
+  real(oops_real),  intent(out)   :: norm
+  !
+  call self%dot_prod_with(self, norm)
+  norm = sqrt(norm)
+  !
+end subroutine aq_field_norm2
+
+subroutine aq_field_stats_tot(self, valmin, valmax, mean, stddev, divnm1)
+  class(qg_fields),  intent(inout) :: self
+  real(aq_real),     intent(out)   :: valmin
+  real(aq_real),     intent(out)   :: valmax
+  real(aq_real),     intent(out)   :: mean
+  real(aq_real),     intent(out)   :: stddev
+  logical, optional, intent(in)    :: divnm1
+  !
+  integer(atlas_kind_idx) :: ib_i, ib_j, ib_k, ib_var
+  real(aq_real) :: den
+  logical :: sgl
+  !
+  sgl = self%prec == aq_single
+  !
+  call self%halo_exchange()
+  !
+  if (sgl) then
+     valmin = minval(self%fldss(1)%fld)
+     valmax = maxval(self%fldss(1)%fld)
+     do ib_var = 2, self%n_vars
+        valmin = min(valmin,minval(self%fldss(ib_var)%fld))
+        valmax = max(valmax,maxval(self%fldss(ib_var)%fld))
+     end do
+  else
+     valmin = minval(self%fldsd(1)%fld)
+     valmax = maxval(self%fldsd(1)%fld)
+     do ib_var = 2, self%n_vars
+        valmin = min(valmin,minval(self%fldsd(ib_var)%fld))
+        valmax = max(valmax,maxval(self%fldsd(ib_var)%fld))
+     end do
+  end if
+  call self%fmpi%allreduce(valmin,fckit_mpi_min())
+  call self%fmpi%allreduce(valmax,fckit_mpi_max())
+  !
+  mean = 0.0_aq_real
+  stddev = 0.0_aq_real
+  den = real(self%geom%grid%size()*self%geom%levels*self%n_vars,kind=aq_real)
+  !
+  if ( self%geom%halo > 0) then
+     do ib_var = 1, self%n_vars
+        do ib_j = self%geom%fs_3d%j_begin(), self%geom%fs_3d%j_end()
+           do ib_i = self%geom%fs_3d%i_begin(ib_j), self%geom%fs_3d%i_end(ib_j)
+              do ib_k = 1, self%geom%levels
+                 if (sgl) then
+                    mean = mean + self%fldss(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))
+                 else
+                    mean = mean + self%fldsd(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))
+                 end if
+              end do
+           end do
+        end do
+     end do
+  else
+     if (sgl) then
+        do ib_var = 1, self%n_vars
+           mean = mean + sum(self%fldss(ib_var)%fld)
+        end do
+     else
+        do ib_var = 1, self%n_vars
+           mean = mean + sum(self%fldsd(ib_var)%fld)
+        end do
+     end if
+  end if
+  mean = mean / den
+  call self%fmpi%allreduce(mean,fckit_mpi_sum())
+  !
+  if ( self%geom%halo > 0) then
+     do ib_var = 1, self%n_vars
+        do ib_j = self%geom%fs_3d%j_begin(), self%geom%fs_3d%j_end()
+           do ib_i = self%geom%fs_3d%i_begin(ib_j), self%geom%fs_3d%i_end(ib_j)
+              do ib_k = 1, self%geom%levels
+                 if (sgl) then
+                    stddev = stddev + &
+                       &     (self%fldss(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))-mean)**2
+                 else
+                    stddev = stddev + &
+                       &     (self%fldsd(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))-mean)**2
+                 end if
+              end do
+           end do
+        end do
+     end do
+  else
+     if (sgl) then
+        do ib_var = 1, self%n_vars
+           stddev = stddev + sum((self%fldss(ib_var)%fld-mean)**2)
+        end do
+     else
+        do ib_var = 1, self%n_vars
+           stddev = stddev + sum((self%fldsd(ib_var)%fld-mean)**2)
+        end do
+     end if
+  end if
+  if (present(divnm1)) then
+     if (divnm1) den = den - 1.0_aq_real
+  end if
+  stddev = stddev / den
+  call self%fmpi%allreduce(stddev,fckit_mpi_sum())
+  !
+end subroutine aq_field_stats_tot
+
+subroutine aq_field_stats_per_var(self, valmin, valmax, mean, stddev, divnm1)
+  class(qg_fields),  intent(inout) :: self
+  real(aq_real),     intent(out)   :: valmin(:)
+  real(aq_real),     intent(out)   :: valmax(:)
+  real(aq_real),     intent(out)   :: mean(:)
+  real(aq_real),     intent(out)   :: stddev(:)
+  logical, optional, intent(in)    :: divnm1
+  !
+  integer(atlas_kind_idx) :: ib_i, ib_j, ib_k, ib_var
+  real(aq_real) :: den
+  logical :: sgl
+  !
+  sgl = self%prec == aq_single
+  !
+  if (size(valmin) /= self%n_vars) call abor1_ftn('valmin per var wrong argument size')
+  if (size(valmax) /= self%n_vars) call abor1_ftn('valmax per var wrong argument size')
+  if (size(mean) /= self%n_vars) call abor1_ftn('mean per var wrong argument size')
+  if (size(stddev) /= self%n_vars) call abor1_ftn('stddev per var wrong argument size')
+  !
+  call self%halo_exchange()
+  !
+  if (sgl) then
+     do ib_var = 1, self%n_vars
+        valmin(ib_var) = minval(self%fldss(ib_var)%fld)
+        valmax(ib_var) = maxval(self%fldss(ib_var)%fld)
+     end do
+  else
+     do ib_var = 1, self%n_vars
+        valmin(ib_var) = minval(self%fldsd(ib_var)%fld)
+        valmax(ib_var) = maxval(self%fldsd(ib_var)%fld)
+     end do
+  end if
+  call self%fmpi%allreduce(valmin,fckit_mpi_min())
+  call self%fmpi%allreduce(valmax,fckit_mpi_max())
+  !
+  mean(:) = 0.0_aq_real
+  stddev(:) = 0.0_aq_real
+  den = real(self%geom%grid%size()*self%geom%levels,kind=aq_real)
+  !
+  if ( self%geom%halo > 0) then
+     do ib_var = 1, self%n_vars
+        do ib_j = self%geom%fs_3d%j_begin(), self%geom%fs_3d%j_end()
+           do ib_i = self%geom%fs_3d%i_begin(ib_j), self%geom%fs_3d%i_end(ib_j)
+              do ib_k = 1, self%geom%levels
+                 if (sgl) then
+                    mean(ib_var) = mean(ib_var) + &
+                       &           self%fldss(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))
+                 else
+                    mean(ib_var) = mean(ib_var) + &
+                       &           self%fldsd(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))
+                 end if
+              end do
+           end do
+        end do
+     end do
+  else
+     if (sgl) then
+        do ib_var = 1, self%n_vars
+           mean(ib_var) = sum(self%fldss(ib_var)%fld)
+        end do
+     else
+        do ib_var = 1, self%n_vars
+           mean(ib_var) = sum(self%fldsd(ib_var)%fld)
+        end do
+     end if
+  end if
+  mean(:) = mean(:) / den
+  call self%fmpi%allreduce(mean,fckit_mpi_sum())
+  !
+  if ( self%geom%halo > 0) then
+     do ib_var = 1, self%n_vars
+        do ib_j = self%geom%fs_3d%j_begin(), self%geom%fs_3d%j_end()
+           do ib_i = self%geom%fs_3d%i_begin(ib_j), self%geom%fs_3d%i_end(ib_j)
+              do ib_k = 1, self%geom%levels
+                 if (sgl) then
+                    stddev(ib_var) = stddev(ib_var) + &
+                       &   (self%fldss(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))-mean(ib_var))**2
+                 else
+                    stddev(ib_var) = stddev(ib_var) + &
+                       &   (self%fldsd(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))-mean(ib_var))**2
+                 end if
+              end do
+           end do
+        end do
+     end do
+  else
+     if (sgl) then
+        do ib_var = 1, self%n_vars
+           stddev(ib_var) = sum((self%fldss(ib_var)%fld-mean(ib_var))**2)
+        end do
+     else
+        do ib_var = 1, self%n_vars
+           stddev(ib_var) = sum((self%fldsd(ib_var)%fld-mean(ib_var))**2)
+        end do
+     end if
+  end if
+  if (present(divnm1)) then
+     if (divnm1) den = den - 1.0
+  end if
+  stddev(:) = stddev(:) / den
+  call self%fmpi%allreduce(stddev,fckit_mpi_sum())
+  !
+end subroutine aq_field_stats_per_var
+
+subroutine aq_field_stats_per_var_lev(self, valmin, valmax, mean, stddev, divnm1)
+  class(qg_fields),  intent(inout) :: self
+  real(aq_real),     intent(out)   :: valmin(:,:)
+  real(aq_real),     intent(out)   :: valmax(:,:)
+  real(aq_real),     intent(out)   :: mean(:,:)
+  real(aq_real),     intent(out)   :: stddev(:,:)
+  logical, optional, intent(in)    :: divnm1
+  !
+  integer(atlas_kind_idx) :: ib_i, ib_j, ib_k, ib_var
+  real(aq_real) :: den
+  logical :: sgl
+  !
+  sgl = self%prec == aq_single
+  !
+  if (any(shape(valmin) /= [self%n_vars, self%geom%levels])) &
+     & call abor1_ftn('valmin per var and lev wrong argument size')
+  if (any(shape(valmax) /= [self%n_vars, self%geom%levels])) &
+     & call abor1_ftn('valmax per var and lev wrong argument size')
+  if (any(shape(mean) /= [self%n_vars, self%geom%levels])) &
+     & call abor1_ftn('mean per var and lev wrong argument size')
+  if (any(shape(stddev) /= [self%n_vars, self%geom%levels])) &
+     & call abor1_ftn('stddev per var and lev wrong argument size')
+  !
+  call self%halo_exchange()
+  !
+  if (sgl) then
+     do ib_k = 1, self%geom%levels
+        do ib_var = 1, self%n_vars
+           valmin(ib_var, :) = minval(self%fldss(ib_var)%fld,dim=2)
+           valmax(ib_var, :) = maxval(self%fldss(ib_var)%fld,dim=2)
+        end do
+     end do
+  else
+     do ib_k = 1, self%geom%levels
+        do ib_var = 1, self%n_vars
+           valmin(ib_var, :) = minval(self%fldsd(ib_var)%fld,dim=2)
+           valmax(ib_var, :) = maxval(self%fldsd(ib_var)%fld,dim=2)
+        end do
+     end do
+  end if
+  call self%fmpi%allreduce(valmin,fckit_mpi_min())
+  call self%fmpi%allreduce(valmax,fckit_mpi_max())      
+  !
+  mean(:,:) = 0.0_aq_real
+  stddev(:,:) = 0.0_aq_real
+  den = real(self%geom%grid%size(),kind=aq_real)
+  !
+  if ( self%geom%halo > 0) then
+     do ib_k = 1, self%geom%levels
+        do ib_var = 1, self%n_vars
+           do ib_j = self%geom%fs_3d%j_begin(), self%geom%fs_3d%j_end()
+              do ib_i = self%geom%fs_3d%i_begin(ib_j), self%geom%fs_3d%i_end(ib_j)
+                 if (sgl) then
+                    mean(ib_var,ib_k) = mean(ib_var,ib_k) + &
+                       &     self%fldss(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))
+                 else
+                    mean(ib_var,ib_k) = mean(ib_var,ib_k) + &
+                       &     self%fldsd(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))
+                 end if
+              end do
+           end do
+        end do
+     end do
+  else
+     if (sgl) then
+        do ib_k = 1, self%geom%levels
+           do ib_var = 1, self%n_vars
+              mean(ib_var,ib_k) = sum(self%fldss(ib_var)%fld(ib_k,:)) 
+           end do
+        end do
+     else
+        do ib_k = 1, self%geom%levels
+           do ib_var = 1, self%n_vars
+              mean(ib_var,ib_k) = sum(self%fldsd(ib_var)%fld(ib_k,:)) 
+           end do
+        end do
+     end if
+  end if
+  mean(:,:) = mean(:,:) / den
+  call self%fmpi%allreduce(mean,fckit_mpi_sum())
+  !
+  if ( self%geom%halo > 0) then
+     do ib_k = 1, self%geom%levels
+        do ib_var = 1, self%n_vars
+           do ib_j = self%geom%fs_3d%j_begin(), self%geom%fs_3d%j_end()
+              do ib_i = self%geom%fs_3d%i_begin(ib_j), self%geom%fs_3d%i_end(ib_j)
+                 if (sgl) then
+                    stddev(ib_var,ib_k) = stddev(ib_var,ib_k) + &
+                       &   (self%fldss(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))-mean(ib_var,ib_k))**2
+                 else
+                    stddev(ib_var,ib_k) = stddev(ib_var,ib_k) + &
+                       &   (self%fldsd(ib_var)%fld(ib_k,self%geom%fs_3d%index(ib_i,ib_j))-mean(ib_var,ib_k))**2
+                 end if
+              end do
+           end do
+        end do
+     end do
+  else
+     if (sgl) then
+        do ib_k = 1, self%geom%levels
+           do ib_var = 1, self%n_vars
+              stddev(ib_var,ib_k) = sum((self%fldss(ib_var)%fld(ib_k,:)-mean(ib_var,ib_k))**2)
+           end do
+        end do
+     else
+        do ib_k = 1, self%geom%levels
+           do ib_var = 1, self%n_vars
+              stddev(ib_var,ib_k) = sum((self%fldsd(ib_var)%fld(ib_k,:)-mean(ib_var,ib_k))**2)
+           end do
+        end do
+     end if
+  end if
+  if (present(divnm1)) then
+     if (divnm1) den = den - 1.0_aq_real
+  end if
+  stddev(:,:) = stddev(:,:) / den
+  call self%fmpi%allreduce(stddev,fckit_mpi_sum())
+  !
+end subroutine aq_field_stats_per_var_lev
+
+subroutine aq_field_info(self, config)
+  class(qg_fields),          intent(inout) :: self
+  type(fckit_Configuration), intent(inout) :: config
+
+  type(fckit_Configuration) :: geom_config
+  type(fckit_Configuration) :: stat_config
+  type(fckit_Configuration) :: species_config
+
+  integer :: year, month, day, hour, minute, second
+  integer :: ib_var, nx, ny, nz, halo
+  real(aq_real) :: deltax, deltay, x0, y0
+  character(len=:), allocatable :: domain
+  character(len=:), allocatable :: orientation
+  character(len=:), allocatable :: model
+  real(aq_real), allocatable, dimension(:) :: minvar, maxvar, meanvar, stddevvar
+
+  call config%set('name',self%fs_name)
+  call config%set('state variables',self%var_name)
+  call config%set('n_vars',self%n_vars)
+  call datetime_to_yyyymmddhhmmss(self%date, year, month, day, hour, minute, second)
+  call config%set('date',[year,month,day,hour,minute,second])
+  call config%set('precision',self%prec)
+  
+  geom_config = fckit_configuration()
+  call self%geom%info(nx, ny, nz, deltax, deltay, x0, y0, halo, domain, orientation, model)
+  call geom_config%set('nx',nx)
+  call geom_config%set('ny',ny)
+  call geom_config%set('nz',nz)
+  call geom_config%set('deltax',deltax)
+  call geom_config%set('deltay',deltay)
+  call geom_config%set('x0',x0)
+  call geom_config%set('y0',y0)
+  call geom_config%set('halo',halo)
+  call geom_config%set('domain',domain)
+  call geom_config%set('orientation',orientation)
+  call geom_config%set('model',model)
+  call config%set('geometry',geom_config)
+  call geom_config%final()
+
+  stat_config = fckit_configuration()
+  allocate(minvar(self%n_vars))
+  allocate(maxvar(self%n_vars))
+  allocate(meanvar(self%n_vars))
+  allocate(stddevvar(self%n_vars))
+  call self%stats(minvar, maxvar, meanvar, stddevvar)
+  
+  do ib_var = 1, self%n_vars
+     species_config = fckit_configuration()
+     call species_config%set('min',minvar(ib_var))
+     call species_config%set('max',maxvar(ib_var))
+     call species_config%set('mean',meanvar(ib_var))
+     call species_config%set('stddev',stddevvar(ib_var))
+     call stat_config%set(trim(self%var_name(ib_var)),species_config)
+     call species_config%final()
+  end do
+  
+  deallocate(minvar)
+  deallocate(maxvar)
+  deallocate(meanvar)
+  deallocate(stddevvar)
+  call config%set('statistics',stat_config)
+  call stat_config%final()
+
+end subroutine aq_field_info
+
+subroutine aq_field_read(self, config, date)
+  class(qg_fields),          intent(inout) :: self
+  type(fckit_Configuration), intent(in)    :: config
+  type(datetime), optional,  intent(in)    :: date
+
+  character(len=:), allocatable :: file
+  type(datetime) :: vdate
+  integer :: strlen, dotpos
+
+  vdate = self%date
+  if (present(date)) vdate = date
+
+  call config%get_or_die("filename", file)
+  strlen = len_trim(file)
+  dotpos = index(trim(file),'.',back=.true.)
+
+  if (file(dotpos+1:strlen) == 'nc') then
+     if (trim(self%geom%model) == "MOCAGE") then
+        call aq_read_mocage_nc(self, self%var_name, self%geom, file, vdate)
+     else
+        call abor1_ftn('NetCDF input only coded for MOCAGE')
+     end if
+  else
+     call abor1_ftn('Input format '//file(dotpos+1:strlen)//' not recognised')
+  end if
+
+end subroutine aq_field_read
+
+subroutine aq_field_write(self, config, date)
+  class(qg_fields),          intent(in) :: self
+  type(fckit_Configuration), intent(in) :: config
+  type(datetime), optional,  intent(in) :: date
+
+  character(len=:), allocatable :: file
+  type(datetime) :: vdate
+  integer :: strlen, dotpos
+
+  vdate = self%date
+  if (present(date)) vdate = date
+
+  call config%get_or_die("filename", file)
+  strlen = len(trim(file))
+  dotpos = index(trim(file),'.',back=.true.)
+
+  if (file(dotpos+1:strlen) == 'nc') then
+     if (trim(self%geom%model) == "MOCAGE") then
+!AP MISSING atlas_FieldSet %name() interfaces
+!AP            call aq_write_mocage_nc(self, self%var_name, self%geom, file)
+        call aq_write_mocage_nc(self, self%fs_name, self%var_name, self%geom, file, vdate)
+!AP END
+     else
+        call abor1_ftn('NetCDF output only coded for MOCAGE')
+     end if
+  else if (file(dotpos+1:strlen) == 'msh') then
+     call aq_write_field_gmsh(self, self%geom, file)
+  else
+     call abor1_ftn('Output format '//file(dotpos+1:strlen)//' not recognised')
+  end if
+
+end subroutine aq_field_write
+
+subroutine aq_field_ana_IC(self)
+  class(qg_fields), intent(inout) :: self
+
+  type(atlas_Field) :: field_xy
+  real(atlas_kind_real64), pointer :: xy(:,:)
+  integer(atlas_kind_idx) :: ib
+
+  real(aq_real), parameter :: dp_pi=3.14159265359
+  real(aq_real), parameter :: dLon0 = 6.3
+  real(aq_real), parameter :: dLat0 = 0.8
+  real(aq_real), parameter :: dR0   = 3.0
+  real(aq_real), parameter :: dD    = 10.0
+  real(aq_real), parameter :: dT    = 6.0
+  real(aq_real) :: dp_conv
+
+  real(aq_real) :: dSinC, dCosC, dCosT, dSinT
+  real(aq_real) :: dTrm, dX, dY, dZ
+  real(aq_real) :: dlon, dlat
+  real(aq_real) :: dRho, dVt, dOmega
+
+  !
+  ! Fill level 1 of variable 1
+
+  dp_conv = dp_pi/180._aq_real
+  dSinC = sin( dLat0 )
+  dCosC = cos( dLat0 )
+
+  field_xy = self%geom%fs_3d%xy()
+  call field_xy%data(xy)
+
+  do ib = 1, self%geom%fs_3d%size()
+     ! Find the rotated longitude and latitude of a point on a sphere
+     !    with pole at (dLon0, dLat0).
+     dCosT = cos( xy(2,ib)*dp_conv )
+     dSinT = sin( xy(2,ib)*dp_conv )
+
+     dTrm = dCosT * cos( xy(1,ib)*dp_conv - dLon0 )
+     dX   = dSinC * dTrm - dCosC * dSinT
+     dY   = dCosT * sin( xy(1,ib)*dp_conv - dLon0 )
+     dZ   = dSinC * dSinT + dCosC * dTrm
+
+     dlon = atan2( dY, dX )
+     if( dlon < 0.0_aq_real ) dlon = dlon + 2.0_aq_real * dp_pi
+     dlat = asin( dZ )
+
+     dRho = dR0 * cos(dlat)
+     dVt = 3.0_aq_real * sqrt(3.0_aq_real)/2.0_aq_real/cosh(dRho)/cosh(dRho)*tanh(dRHo)
+     if (dRho == 0.0_aq_real) then
+        dOmega = 0.0_aq_real
+     else
+        dOmega = dVt / dRho
+     end if
+
+     if (self%prec == aq_single) then
+        self%fldss(1)%fld(1,ib) = real(2.0_aq_real * &
+           & ( 1.0_aq_real + tanh( dRho / dD * sin( dLon - dOmega * dT ) ) ), kind=aq_single)
+     else
+        self%fldsd(1)%fld(1,ib) = 2.0_aq_real * &
+           & ( 1.0_aq_real + tanh( dRho / dD * sin( dLon - dOmega * dT ) ) )
+     end if
+  end do
+
+  call field_xy%final()
+
+  ! Propagate on the vertical
+  if (self%prec == aq_single) then
+     do ib = 2, self%geom%levels
+        self%fldss(1)%fld(ib,:) = 1.0_aq_single/real(ib,kind=aq_single) * self%fldss(1)%fld(1,:)
+     end do
+  else
+     do ib = 2, self%geom%levels
+        self%fldsd(1)%fld(ib,:) = 1.0_aq_real/real(ib,kind=aq_real) * self%fldsd(1)%fld(1,:)
+     end do
+  end if
+  
+  ! Propagate to other species
+  if (self%prec == aq_single) then
+     do ib = 2, self%n_vars
+        self%fldss(ib)%fld(:,:) = self%fldss(ib-1)%fld(:,:)*1.2_aq_single
+     end do
+  else
+     do ib = 2, self%n_vars
+        self%fldsd(ib)%fld(:,:) = self%fldsd(ib-1)%fld(:,:)*1.2_aq_real
+     end do
+  end if
+  
+  call self%halo_exchange()
+  !
+end subroutine aq_field_ana_IC
+
+integer(atlas_kind_idx) function aq_field_idx_var(self, var) result(ib_var)
+
+  class(qg_fields), intent(in)  :: self
+  character(len=*), intent(in)  :: var
+
+  if (.not. self%has_field(trim(var))) &
+     & call abor1_ftn('Idx var: variable '//trim(var)// ' not found')
+
+  do ib_var = 1, self%n_vars
+     if ( trim(self%var_name(ib_var)) == trim(var)) exit
+  end do
+
+end function aq_field_idx_var
+
+subroutine aq_field_var(self, var, fld_var)
+  class(qg_fields), intent(in)  :: self
+  character(len=*), intent(in)  :: var
+  real(aq_real),    intent(out) :: fld_var(:,:)
+
+  integer :: il_var
+  !
+  il_var = self%idx_var(var)
+
+  if ( any(shape(fld_var) /= [self%geom%levels,self%geom%fs_3d%size()])) &
+     & call abor1_ftn('Field get var: shape of output field not compliant')
+
+  if (self%prec == aq_single) then
+     ! Promote
+     fld_var(:,:) = real(self%fldss(il_var)%fld(:,:),kind=aq_real)
+  else
+     fld_var(:,:) = self%fldsd(il_var)%fld(:,:)
+  end if
+  !
+end subroutine aq_field_var
+
+subroutine aq_field_gather_var_at_lev(self, var, lev, fld_2d, owner)
+  class(qg_fields),                  intent(in)  :: self
+  character(len=*),                  intent(in)  :: var
+  integer(atlas_kind_idx),           intent(in)  :: lev
+  integer(atlas_kind_idx), optional, intent(in)  :: owner
+  real(aq_real),                     intent(out) :: fld_2d(:,:)
+
+  integer(atlas_kind_idx) :: il_owner
+
+  type(atlas_Field)  :: aloc_2d
+  type(atlas_Field)  :: aglo_2d
+  real(aq_single), pointer  :: loc_2ds(:)
+  real(aq_single), pointer  :: glo_2ds(:,:)
+  real(aq_real), pointer  :: loc_2d(:)
+  real(aq_real), pointer  :: glo_2d(:,:)
+  integer(atlas_kind_idx) :: il_var
+
+  !
+  il_owner = 0
+  if (present(owner)) il_owner = owner
+
+  if ( self%fmpi%rank() == il_owner ) then
+     if ( any(shape(fld_2d) /= [self%geom%grid%nx(1),self%geom%grid%ny()])) &
+        & call abor1_ftn('Gather var at lev: shape of global output field not compliant')
+  end if
+
+  if (lev > self%geom%levels .or. lev < 1) &
+     & call abor1_ftn('Gather var at lev: level out of bounds')
+
+  if (.not.self%has_field(trim(var))) &
+     & call abor1_ftn('Var: variable '//trim(var)// ' not found')
+
+  il_var = self%idx_var(trim(var))
+
+  aloc_2d = self%geom%fs_2d%create_field(name=trim(var),  &
+     &                                   kind=atlas_real(self%prec))
+  !
+  if (self%prec == aq_single) then
+     call aloc_2d%data(loc_2ds)
+     loc_2ds(:) = self%fldss(il_var)%fld(lev,:)
+  else
+     call aloc_2d%data(loc_2d)
+     loc_2d(:) = self%fldsd(il_var)%fld(lev,:)
+  end if
+
+  aglo_2d = self%geom%fs_2d%create_field(name=trim(var),  &
+     &                                   kind=atlas_real(self%prec), &
+     &                                   global = .true., &
+     &                                   owner = il_owner)
+  call self%geom%fs_2d%gather(aloc_2d, aglo_2d)
+  if ( self%fmpi%rank() == il_owner ) then
+     if (self%prec == aq_single) then
+        call aglo_2d%data(glo_2ds, shape=[self%geom%grid%nx(1),self%geom%grid%ny()])
+        ! Promote
+        fld_2d(:,:) = real(glo_2ds(:,:),kind = aq_real)
+     else
+        call aglo_2d%data(glo_2d, shape=[self%geom%grid%nx(1),self%geom%grid%ny()])
+        fld_2d(:,:) = glo_2d(:,:)
+     end if
+  end if
+
+  call aglo_2d%final()
+  call aloc_2d%final()
+  !
+end subroutine aq_field_gather_var_at_lev
+
+subroutine aq_field_scatteradd_var_at_lev(self, var, lev, fld_2d, owner)
+  class(qg_fields),                  intent(inout) :: self
+  character(len=*),                  intent(in)    :: var
+  integer(atlas_kind_idx),           intent(in)    :: lev
+  integer(atlas_kind_idx), optional, intent(in)    :: owner
+  real(aq_real),                     intent(in)    :: fld_2d(:,:)
+
+  integer(atlas_kind_idx) :: il_owner
+
+  type(atlas_Field)  :: aloc_2d
+  type(atlas_Field)  :: aglo_2d
+  real(aq_single), pointer  :: loc_2ds(:)
+  real(aq_single), pointer  :: glo_2ds(:,:)
+  real(aq_real), pointer  :: loc_2d(:)
+  real(aq_real), pointer  :: glo_2d(:,:)
+  integer(atlas_kind_idx) :: il_var
+
+  !
+  il_owner = 0
+  if (present(owner)) il_owner = owner
+
+  if ( self%fmpi%rank() == il_owner ) then
+     if ( any(shape(fld_2d) /= [self%geom%grid%nx(1),self%geom%grid%ny()])) &
+        & call abor1_ftn('Gather var at lev: shape of global output field not compliant')
+  end if
+
+  if (lev > self%geom%levels .or. lev < 1) &
+     & call abor1_ftn('Gather var at lev: level out of bounds')
+
+  il_var = self%idx_var(trim(var))
+
+  aglo_2d = self%geom%fs_2d%create_field(name=trim(var),  &
+     &                                   kind=atlas_real(self%prec), &
+     &                                   global = .true., &
+     &                                   owner = il_owner)
+  if ( self%fmpi%rank() == il_owner ) then
+     if (self%prec == aq_single) then
+        call aglo_2d%data(glo_2ds, shape=[self%geom%grid%nx(1),self%geom%grid%ny()])
+        ! Demote
+        glo_2ds(:,:) = real(fld_2d(:,:), kind=aq_single)
+     else
+        call aglo_2d%data(glo_2d, shape=[self%geom%grid%nx(1),self%geom%grid%ny()])
+        glo_2d(:,:) = fld_2d(:,:)
+     end if
+  end if
+
+  aloc_2d = self%geom%fs_2d%create_field(name=trim(var),  &
+     &                                   kind=atlas_real(self%prec))
+  !
+  call self%geom%fs_2d%scatter(aglo_2d, aloc_2d)
+  !
+  if (self%prec == aq_single) then
+     call aloc_2d%data(loc_2ds)
+     self%fldss(il_var)%fld(lev,:) = self%fldss(il_var)%fld(lev,:) + loc_2ds(:)
+  else
+     call aloc_2d%data(loc_2d)
+     self%fldsd(il_var)%fld(lev,:) = self%fldsd(il_var)%fld(lev,:) + loc_2d(:)
+  end if
+  !
+  call aglo_2d%final()
+  call aloc_2d%final()
+  !
+  call self%halo_exchange()
+  !
+end subroutine aq_field_scatteradd_var_at_lev
+
+integer(oops_int) function aq_field_serial_size(self) result(ser_size)
+
+  class(qg_fields), intent(in)  :: self
+
+  ser_size = self%locsize * self%n_vars
+
+end function aq_field_serial_size
+
+subroutine aq_field_serialize(self, buff)
+  class(qg_fields), intent(in)  :: self
+  real(oops_real),  intent(out) :: buff(:)
+
+  integer :: ib_var, ib_lev, ib_node, icounter
+  !
+  if (self%prec == oops_real) then
+!$omp parallel do
+     do ib_var = 1, self%n_vars
+        call aq_copy(self%locsize, self%fldsd(ib_var)%fld, &
+           & buff((ib_var-1)*self%locsize+1:ib_var*self%locsize))
+     end do
+!$omp end parallel do
+  else
+!$omp parallel do private(ib_lev, ib_node, icounter)
+     do ib_var = 1, self%n_vars
+        icounter = (ib_var-1)*self%locsize+1
+        do ib_node = 1, self%geom%fs_3d%size()
+           do ib_lev = 1, self%geom%levels
+              buff(icounter) = real(self%fldss(ib_var)%fld(ib_lev, ib_node), kind=oops_real)
+              icounter = icounter + 1
+           end do
+        end do
+     end do
+!$omp end parallel do
+  end if
+  !
+end subroutine aq_field_serialize
+
+subroutine aq_field_deserialize(self, buff, offset)
+   class(qg_fields), intent(inout) :: self
+   real(oops_real),  intent(in)    :: buff(:)
+   integer,          intent(inout) :: offset
+
+   integer :: ib_var, ib_lev, ib_node, icounter
+
+   !
+   if (self%prec == oops_real) then
+!$omp parallel do
+      do ib_var = 1, self%n_vars
+         call aq_copy(self%locsize, buff(offset+(ib_var-1)*self%locsize+1:offset+ib_var*self%locsize), &
+            & self%fldsd(ib_var)%fld)
+      end do
+!$omp end parallel do
    else
-     ! Create field
-     afield = self%geom%afunctionspace%create_field(name=trim(fieldname),kind=atlas_real(kind_real),levels=self%geom%nz)
-
-     ! Add field
-     call afieldset%add(afield)
-   endif
-
-   ! Release pointer
-   call afield%final()
-enddo
-
-end subroutine qg_fields_set_atlas
-! ------------------------------------------------------------------------------
-!> Convert fields to ATLAS
-subroutine qg_fields_to_atlas(self,vars,afieldset)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: self              !< Fields
-type(oops_variables),intent(in) :: vars         !< List of variables
-type(atlas_fieldset),intent(inout) :: afieldset !< ATLAS fieldset
-
-! Local variables
-integer :: jvar,ix,iy,iz,inode
-real(kind_real),pointer :: ptr(:,:)
-character(len=1024) :: fieldname
-type(atlas_field) :: afield
-
-! Get variable
-do jvar=1,vars%nvars()
-   fieldname = vars%variable(jvar)
-   if (afieldset%has_field(trim(fieldname))) then
-     ! Get afield
-     afield = afieldset%field(trim(fieldname))
-   else
-     ! Create field
-     afield = self%geom%afunctionspace%create_field(name=trim(fieldname),kind=atlas_real(kind_real),levels=self%geom%nz)
-
-     ! Add field
-     call afieldset%add(afield)
-   endif
-
-   ! Copy field
-   call afield%data(ptr)
-   do iz=1,self%geom%nz
-     inode = 0
-     do iy=1,self%geom%ny
-       do ix=1,self%geom%nx
-         inode = inode+1
-         select case (trim(fieldname))
-         case ('x')
-           ptr(iz,inode) = self%x(ix,iy,iz)
-         case ('q')
-           ptr(iz,inode) = self%q(ix,iy,iz)
-         case ('u')
-           ptr(iz,inode) = self%u(ix,iy,iz)
-         case ('v')
-           ptr(iz,inode) = self%v(ix,iy,iz)
-         case default
-           call abor1_ftn('qg_fields_to_atlas: wrong variable')
-         endselect
-       enddo
-     enddo
-   enddo
-
-   ! Release pointer
-   call afield%final()
-enddo
-
-end subroutine qg_fields_to_atlas
-! ------------------------------------------------------------------------------
-!> Get fields from ATLAS
-subroutine qg_fields_from_atlas(self,vars,afieldset)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self           !< Fields
-type(oops_variables),intent(in) :: vars         !< List of variables
-type(atlas_fieldset),intent(inout) :: afieldset !< ATLAS fieldset
-
-! Local variables
-integer :: jvar,ix,iy,iz,inode
-real(kind_real),pointer :: ptr(:,:)
-character(len=1024) :: fieldname
-type(atlas_field) :: afield
-
-! Get variable
-do jvar=1,vars%nvars()
-   ! Get afield
-   fieldname = vars%variable(jvar)
-   afield = afieldset%field(trim(fieldname))
-
-   ! Copy field
-   call afield%data(ptr)
-   do iz=1,self%geom%nz
-     inode = 0
-     do iy=1,self%geom%ny
-       do ix=1,self%geom%nx
-         inode = inode+1
-         select case (trim(fieldname))
-         case ('x')
-           self%x(ix,iy,iz) = ptr(iz,inode)
-         case ('q')
-           self%q(ix,iy,iz) = ptr(iz,inode)
-         case ('u')
-           self%u(ix,iy,iz) = ptr(iz,inode)
-         case ('v')
-           self%v(ix,iy,iz) = ptr(iz,inode)
-         case default
-           call abor1_ftn('qg_fields_to_atlas: wrong variable')
-         endselect
-       enddo
-     enddo
-   enddo
-
-   ! Release pointer
-   call afield%final()
-enddo
-
-end subroutine qg_fields_from_atlas
-! ------------------------------------------------------------------------------
-!> Get points from fields
-subroutine qg_fields_getpoint(fld,iter,nval,vals)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld           !< Fields
-type(qg_geom_iter),intent(in) :: iter       !< Geometry iterator
-integer,intent(in) :: nval                  !< Number of values
-real(kind_real),intent(inout) :: vals(nval) !< Values
-
-! Local variables
-integer :: ii
-character(len=1024) :: record
-
-! Check
-if ((fld%geom%nx/=iter%geom%nx).or.(fld%geom%ny/=iter%geom%ny).or.(fld%geom%nz/=iter%geom%nz)) then
-  write(record,*) 'qg_fields_getpoint: resolution inconsistency, ',fld%geom%nx,'/',fld%geom%ny,'/',fld%geom%nz, &
-& ' and ',iter%geom%nx,'/',iter%geom%ny,'/',iter%geom%nz
-  call abor1_ftn(record)
-endif
-if (fld%geom%nz/=nval) then
-  write(record,*) 'qg_fields_getpoint: array sizes are different: ',fld%geom%nz,'/',nval
-  call abor1_ftn(record)
-endif
-
-! Initialization
-ii = 0
-
-! Get values
-if (allocated(fld%x)) then
-  vals(ii+1:ii+fld%geom%nz) = fld%x(iter%ilon,iter%ilat,:)
-  ii = ii+fld%geom%nz
-endif
-if (allocated(fld%q)) then
-  vals(ii+1:ii+fld%geom%nz) = fld%q(iter%ilon,iter%ilat,:)
-  ii = ii+fld%geom%nz
-endif
-if (allocated(fld%u)) then
-  vals(ii+1:ii+fld%geom%nz) = fld%u(iter%ilon,iter%ilat,:)
-  ii = ii+fld%geom%nz
-endif
-if (allocated(fld%v)) then
-  vals(ii+1:ii+fld%geom%nz) = fld%v(iter%ilon,iter%ilat,:)
-  ii = ii+fld%geom%nz
-endif
-
-end subroutine qg_fields_getpoint
-! ------------------------------------------------------------------------------
-!> Set fields values at a specified gridpoint
-subroutine qg_fields_setpoint(fld,iter,nval,vals)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: fld     !< Fields
-type(qg_geom_iter),intent(in) :: iter    !< Geometry iterator
-integer,intent(in) :: nval               !< Number of values
-real(kind_real),intent(in) :: vals(nval) !< Values
-
-! Local variables
-integer :: ii
-character(len=1024) :: record
-
-! Check
-if ((fld%geom%nx/=iter%geom%nx).or.(fld%geom%ny/=iter%geom%ny).or.(fld%geom%nz/=iter%geom%nz)) then
-  write(record,*) 'qg_fields_getpoint: resolution inconsistency,',fld%geom%nx,'/',fld%geom%ny,'/',fld%geom%nz, &
-& ' and ',iter%geom%nx,'/',iter%geom%ny,'/',iter%geom%nz
-  call abor1_ftn(record)
-endif
-if (fld%geom%nz/=nval) then
-  write(record,*) 'qg_fields_getpoint: array sizes are different:',fld%geom%nz,'/',nval
-  call abor1_ftn(record)
-endif
-
-! Initialization
-ii = 0
-
-! Get values
-if (allocated(fld%x)) then
-  fld%x(iter%ilon,iter%ilat,:) = vals(ii+1:ii+fld%geom%nz)
-  ii = ii+fld%geom%nz
-endif
-if (allocated(fld%q)) then
-  fld%q(iter%ilon,iter%ilat,:) = vals(ii+1:ii+fld%geom%nz)
-  ii = ii+fld%geom%nz
-endif
-if (allocated(fld%u)) then
-  fld%u(iter%ilon,iter%ilat,:) = vals(ii+1:ii+fld%geom%nz)
-  ii = ii+fld%geom%nz
-endif
-if (allocated(fld%v)) then
-  fld%v(iter%ilon,iter%ilat,:) = vals(ii+1:ii+fld%geom%nz)
-  ii = ii+fld%geom%nz
-endif
-
-end subroutine qg_fields_setpoint
-! ------------------------------------------------------------------------------
-!> Serialize fields
-subroutine qg_fields_serialize(fld,vsize,vect_fld)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld                !< Fields
-integer,intent(in) :: vsize                      !< Size
-real(kind_real),intent(inout) :: vect_fld(vsize) !< Vector
-
-! Local variables
-integer :: ix,iy,iz,ind
-
-! Initialize
-ind = 0
-
-! Copy
-do iz=1,fld%geom%nz
-  do iy=1,fld%geom%ny
-    do ix=1,fld%geom%nx
-      if (allocated(fld%x)) then
-        ind = ind + 1
-        vect_fld(ind) = fld%x(ix,iy,iz)
-      endif
-      if (allocated(fld%q)) then
-        ind = ind + 1
-        vect_fld(ind) = fld%q(ix,iy,iz)
-      endif
-      if (allocated(fld%u)) then
-        ind = ind + 1
-        vect_fld(ind) = fld%u(ix,iy,iz)
-      endif
-      if (allocated(fld%v)) then
-        ind = ind + 1
-        vect_fld(ind) = fld%v(ix,iy,iz)
-      endif
-    enddo
-  enddo
-enddo
-
-if (fld%lbc) then
-  do iz=1,fld%geom%nz
-    ind = ind + 1
-    vect_fld(ind) = fld%x_north(iz)
-    ind = ind + 1
-    vect_fld(ind) = fld%x_south(iz)
-    do ix=1,fld%geom%nx
-      ind = ind + 1
-      vect_fld(ind) = fld%q_north(ix,iz)
-      ind = ind + 1
-      vect_fld(ind) = fld%q_south(ix,iz)
-    enddo
-  enddo
-endif
-
-end subroutine qg_fields_serialize
-! ------------------------------------------------------------------------------
-!> Deserialize fields
-subroutine qg_fields_deserialize(self,vsize,vect_fld,index)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self         !< Fields
-integer,intent(in) :: vsize                   !< Size
-real(kind_real),intent(in) :: vect_fld(vsize) !< Vector
-integer,intent(inout) :: index                !< Index
-
-! Local variables
-integer :: ix,iy,iz
-
-! 3d field
-index = 1 + index
-do iz=1,self%geom%nz
-  do iy=1,self%geom%ny
-    do ix=1,self%geom%nx
-      if (allocated(self%x)) then
-        self%x(ix,iy,iz) = vect_fld(index)
-        index = index+1
-      endif
-      if (allocated(self%q)) then
-        self%x(ix,iy,iz) = vect_fld(index)
-        index = index+1
-      endif
-      if (allocated(self%u)) then
-        self%x(ix,iy,iz) = vect_fld(index)
-        index = index+1
-      endif
-      if (allocated(self%v)) then
-        self%x(ix,iy,iz) = vect_fld(index)
-        index = index+1
-      endif
-    enddo
-  enddo
-enddo
-
-! Boundaries
-if (self%lbc) then
-  do iz=1,self%geom%nz
-    index = index + 1
-    self%x_north(iz) = vect_fld(index)
-    index = index + 1
-    self%x_south(iz) = vect_fld(index)
-    do ix=1,self%geom%nx
-      index = index + 1
-      self%q_north(ix,iz) = vect_fld(index)
-      index = index + 1
-      self%q_south(ix,iz) = vect_fld(index)
-    enddo
-  enddo
-endif
-
-index = index - 1
-
-end subroutine qg_fields_deserialize
-! ------------------------------------------------------------------------------
-!> Complete missing fields consistently
-subroutine qg_fields_complete(self,var)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(inout) :: self !< Fields
-character(len=1),intent(in) :: var    !< Reference variable ('x' or 'q')
-
-! Local variables
-real(kind_real) :: x(self%geom%nx,self%geom%ny,self%geom%nz)
-real(kind_real) :: q(self%geom%nx,self%geom%ny,self%geom%nz)
-real(kind_real) :: u(self%geom%nx,self%geom%ny,self%geom%nz)
-real(kind_real) :: v(self%geom%nx,self%geom%ny,self%geom%nz)
-
-select case (var)
-case ('x')
-  if (allocated(self%q)) then
-    if (self%lbc) then
-      call convert_x_to_q(self%geom,self%x,self%x_north,self%x_south,self%q)
-    else
-      call convert_x_to_q_tl(self%geom,self%x,self%q)
-    endif
-  endif
-  if (allocated(self%u)) then
-    if (self%lbc) then
-      call convert_x_to_u(self%geom,self%x,self%x_north,self%x_south,self%u)
-    else
-      call convert_x_to_u_tl(self%geom,self%x,self%u)
-    endif
-  endif
-  if (allocated(self%v)) then
-    if (self%lbc) then
-      call convert_x_to_v(self%geom,self%x,self%v)
-    else
-      call convert_x_to_v_tl(self%geom,self%x,self%v)
-    endif
-  endif
-case ('q')
-  if (allocated(self%x).or.allocated(self%u).or.allocated(self%v)) then
-    if (self%lbc) then
-      call convert_q_to_x(self%geom,self%q,self%x_north,self%x_south,x)
-    else
-      call convert_q_to_x_tl(self%geom,self%q,x)
-    endif
-    if (allocated(self%x)) self%x = x
-    if (allocated(self%u)) then
-      if (self%lbc) then
-        call convert_x_to_u(self%geom,self%x,self%x_north,self%x_south,self%u)
-      else
-        call convert_x_to_u_tl(self%geom,self%x,self%u)
-      endif
-    endif
-    if (allocated(self%v)) then
-      if (self%lbc) then
-        call convert_x_to_v(self%geom,self%x,self%v)
-      else
-        call convert_x_to_v_tl(self%geom,self%x,self%v)
-      endif
-    endif
-  endif
-case default
-  call abor1_ftn('qg_fields_complete: wrong variable')
-end select
-
-end subroutine qg_fields_complete
-! ------------------------------------------------------------------------------
-!> Check fields
-subroutine qg_fields_check(self)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: self !< Fields
-
-! Local variables
-logical :: bad
-character(len=1024) :: record
-
-! Initialization
-bad = .false.
-
-! Check 3d field
-bad = bad.or.(.not.(allocated(self%x).or.allocated(self%q).or.allocated(self%u).or.allocated(self%v)))
-if (allocated(self%x)) then
-  bad = bad.or.(size(self%x,1)/=self%geom%nx)
-  bad = bad.or.(size(self%x,2)/=self%geom%ny)
-  bad = bad.or.(size(self%x,3)/=self%geom%nz)
-endif
-if (allocated(self%q)) then
-  bad = bad.or.(size(self%q,1)/=self%geom%nx)
-  bad = bad.or.(size(self%q,2)/=self%geom%ny)
-  bad = bad.or.(size(self%q,3)/=self%geom%nz)
-endif
-if (allocated(self%u)) then
-  bad = bad.or.(size(self%u,1)/=self%geom%nx)
-  bad = bad.or.(size(self%u,2)/=self%geom%ny)
-  bad = bad.or.(size(self%u,3)/=self%geom%nz)
-endif
-if (allocated(self%v)) then
-  bad = bad.or.(size(self%v,1)/=self%geom%nx)
-  bad = bad.or.(size(self%v,2)/=self%geom%ny)
-  bad = bad.or.(size(self%v,3)/=self%geom%nz)
-endif
-
-! Check boundaries
-if (self%lbc) then
-  bad = bad.or.(.not.allocated(self%x_north))
-  bad = bad.or.(.not.allocated(self%x_south))
-  bad = bad.or.(.not.allocated(self%q_north))
-  bad = bad.or.(.not.allocated(self%q_south))
-  bad = bad.or.(size(self%x_north)/=self%geom%nz)
-  bad = bad.or.(size(self%x_south)/=self%geom%nz)
-  bad = bad.or.(size(self%q_north,1)/=self%geom%nx)
-  bad = bad.or.(size(self%q_north,2)/=self%geom%nz)
-  bad = bad.or.(size(self%q_south,1)/=self%geom%nx)
-  bad = bad.or.(size(self%q_south,2)/=self%geom%nz)
-else
-  bad = bad.or.allocated(self%x_north)
-  bad = bad.or.allocated(self%x_south)
-  bad = bad.or.allocated(self%q_north)
-  bad = bad.or.allocated(self%q_south)
-endif
-
-if (bad) then
-  call fckit_log%info('qg_fields_check: field not consistent')
-  write(record,*) '  nx,ny,nz,lbc = ',self%geom%nx,self%geom%ny,self%geom%nz,self%lbc
-  call fckit_log%info(record)
-  if (allocated(self%x)) then
-    write(record,*) '  shape(x) = ',shape(self%x)
-    call fckit_log%info(record)
-  endif
-  if (allocated(self%q)) then
-    write(record,*) '  shape(q) = ',shape(self%q)
-    call fckit_log%info(record)
-  endif
-  if (allocated(self%u)) then
-    write(record,*) '  shape(u) = ',shape(self%u)
-    call fckit_log%info(record)
-  endif
-  if (allocated(self%v)) then
-    write(record,*) '  shape(v) = ',shape(self%v)
-    call fckit_log%info(record)
-  endif
-  if (self%lbc) then
-    write(record,*) '  shape(x_north) = ',shape(self%x_north)
-    call fckit_log%info(record)
-    write(record,*) '  shape(x_south) = ',shape(self%x_south)
-    call fckit_log%info(record)
-    write(record,*) '  shape(q_north) = ',shape(self%q_north)
-    call fckit_log%info(record)
-    write(record,*) '  shape(q_south) = ',shape(self%q_south)
-    call fckit_log%info(record)
-    call abor1_ftn ('qg_fields_check: field not consistent')
-  endif
-endif
-
-end subroutine qg_fields_check
-! ------------------------------------------------------------------------------
-!> Check fields resolution
-subroutine qg_fields_check_resolution(fld1,fld2)
-
-implicit none
-
-! Passed variables
-type(qg_fields),intent(in) :: fld1 !< First fields
-type(qg_fields),intent(in) :: fld2 !< Second fields
-
-! Local variables
-character(len=1024) :: record
-
-! Check fields consistency
-if ((fld1%geom%nx/=fld2%geom%nx).or.(fld1%geom%ny/=fld2%geom%ny).or.(fld1%geom%nz/=fld2%geom%nz)) then
-  write(record,*) 'qg_fields_check_resolution: resolution inconsistency, ',fld1%geom%nx,'/',fld1%geom%ny,'/',fld1%geom%nz, &
-& ' and ',fld2%geom%nx,'/',fld2%geom%ny,'/',fld2%geom%nz
-  call abor1_ftn(record)
-endif
-
-! Check fields independently
-call qg_fields_check(fld1)
-call qg_fields_check(fld2)
-
-end subroutine qg_fields_check_resolution
+!$omp parallel do private(ib_lev, ib_node, icounter)
+      do ib_var = 1, self%n_vars
+         icounter = offset + (ib_var-1)*self%locsize+1
+         do ib_node = 1, self%geom%fs_3d%size()
+            do ib_lev = 1, self%geom%levels
+               self%fldss(ib_var)%fld(ib_lev, ib_node) = real(buff(icounter), kind=aq_single)
+               icounter = icounter + 1
+            end do
+         end do
+      end do
+!$omp end parallel do
+   end if
+   !
+   offset = offset + self%n_vars * self%locsize
+   !
+end subroutine aq_field_deserialize
+
+subroutine aq_field_serialize_single(self, buff)
+  class(qg_fields), intent(in)  :: self
+  real(aq_single),  intent(out) :: buff(:)
+
+  integer :: ib_var
+  !
+!$omp parallel do
+  do ib_var = 1, self%n_vars
+     call aq_copy(self%locsize, self%fldss(ib_var)%fld, &
+        & buff((ib_var-1)*self%locsize+1:ib_var*self%locsize))
+  end do
+!$omp end parallel do
+  !
+end subroutine aq_field_serialize_single
+
+subroutine aq_field_serialize_real(self, buff)
+  class(qg_fields), intent(in)  :: self
+  real(aq_real),    intent(out) :: buff(:)
+
+  integer :: ib_var
+  !
+!$omp parallel do
+  do ib_var = 1, self%n_vars
+     call aq_copy(self%locsize, self%fldsd(ib_var)%fld, &
+        & buff((ib_var-1)*self%locsize+1:ib_var*self%locsize))
+  end do
+!$omp end parallel do
+  !
+end subroutine aq_field_serialize_real
+
+subroutine aq_field_deserialize_single(self, buff, offset)
+   class(qg_fields), intent(inout) :: self
+   real(aq_single),  intent(in)    :: buff(:)
+   integer,          intent(inout) :: offset
+
+   integer :: ib_var
+   !
+!$omp parallel do
+   do ib_var = 1, self%n_vars
+      call aq_copy(self%locsize, buff(offset+(ib_var-1)*self%locsize+1:offset+ib_var*self%locsize), &
+         & self%fldss(ib_var)%fld)
+   end do
+!$omp end parallel do
+   !
+   offset = offset + self%n_vars * self%locsize
+   !
+end subroutine aq_field_deserialize_single
+  !
+subroutine aq_field_deserialize_real(self, buff, offset)
+   class(qg_fields), intent(inout) :: self
+   real(aq_real),    intent(in)    :: buff(:)
+   integer,          intent(inout) :: offset
+
+   integer :: ib_var
+   !
+!$omp parallel do
+   do ib_var = 1, self%n_vars
+      call aq_copy(self%locsize, buff(offset+(ib_var-1)*self%locsize+1:offset+ib_var*self%locsize), &
+         & self%fldsd(ib_var)%fld)
+   end do
+!$omp end parallel do
+   !
+   offset = offset + self%n_vars * self%locsize
+   !
+end subroutine aq_field_deserialize_real
 ! ------------------------------------------------------------------------------
 end module qg_fields_mod

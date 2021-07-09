@@ -32,44 +32,50 @@
 #include "oops/util/DateTime.h"
 #include "oops/util/Logger.h"
 
+#include "oops/util/abor1_cpp.h"
+
 // -----------------------------------------------------------------------------
 namespace qg {
 // -----------------------------------------------------------------------------
 FieldsQG::FieldsQG(const GeometryQG & geom, const oops::Variables & vars,
-                   const bool & lbc, const util::DateTime & time):
-  geom_(new GeometryQG(geom)), vars_(vars), lbc_(lbc), time_(time)
+                  const util::DateTime & time):
+  geom_(new GeometryQG(geom)), vars_(vars), time_(time)
 {
-  qg_fields_create_f90(keyFlds_, geom_->toFortran(), vars_, lbc_);
+  qg_fields_create_f90(keyFlds_, geom_->toFortran(), vars_);
 }
 // -----------------------------------------------------------------------------
 FieldsQG::FieldsQG(const FieldsQG & other, const bool copy)
-  : geom_(other.geom_), vars_(other.vars_), lbc_(other.lbc_), time_(other.time_)
+  : vars_(other.vars_), time_(other.time_)
 {
-  qg_fields_create_from_other_f90(keyFlds_, other.keyFlds_, geom_->toFortran());
+  qg_fields_create_from_other_f90(keyFlds_, other.keyFlds_);
   if (copy) {
     qg_fields_copy_f90(keyFlds_, other.keyFlds_);
   }
 }
 // -----------------------------------------------------------------------------
 FieldsQG::FieldsQG(const FieldsQG & other)
-  : geom_(other.geom_), vars_(other.vars_), lbc_(other.lbc_), time_(other.time_)
+  : vars_(other.vars_), time_(other.time_)
 {
-  qg_fields_create_from_other_f90(keyFlds_, other.keyFlds_, geom_->toFortran());
+  qg_fields_create_from_other_f90(keyFlds_, other.keyFlds_);
   qg_fields_copy_f90(keyFlds_, other.keyFlds_);
 }
 // -----------------------------------------------------------------------------
 FieldsQG::FieldsQG(const FieldsQG & other, const GeometryQG & geom)
-  : geom_(new GeometryQG(geom)), vars_(other.vars_), lbc_(other.lbc_), time_(other.time_)
+  : geom_(new GeometryQG(geom)), vars_(other.vars_), time_(other.time_)
 {
-  qg_fields_create_f90(keyFlds_, geom_->toFortran(), vars_, lbc_);
-  qg_fields_change_resol_f90(keyFlds_, other.keyFlds_);
+  oops::Log::warning() << " Change of resolution not yet implemented. Copy instead. "
+   << std::endl;
+  // qg_fields_create_f90(keyFlds_, geom_->toFortran(), vars_);
+  // qg_fields_change_resol_f90(keyFlds_, other.keyFlds_);
+  qg_fields_create_from_other_f90(keyFlds_, other.keyFlds_);
+  qg_fields_copy_f90(keyFlds_, other.keyFlds_);
 }
 // -----------------------------------------------------------------------------
 FieldsQG::FieldsQG(const FieldsQG & other, const oops::Variables & vars)
-  : geom_(other.geom_), vars_(vars), lbc_(other.lbc_), time_(other.time_)
+  : geom_(other.geom_), vars_(vars), time_(other.time_)
 {
 // TODO(Benjamin): delete that ?
-  qg_fields_create_f90(keyFlds_, geom_->toFortran(), vars_, lbc_);
+  qg_fields_create_f90(keyFlds_, geom_->toFortran(), vars_);
   qg_fields_copy_f90(keyFlds_, other.keyFlds_);
 }
 // -----------------------------------------------------------------------------
@@ -134,7 +140,7 @@ void FieldsQG::dirac(const eckit::Configuration & config) {
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::changeResolution(const FieldsQG & other) {
-  qg_fields_change_resol_f90(keyFlds_, other.keyFlds_);
+  // qg_fields_change_resol_f90(keyFlds_, other.keyFlds_);
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::add(const FieldsQG & rhs) {
@@ -149,15 +155,15 @@ void FieldsQG::diff(const FieldsQG & x1, const FieldsQG & x2) {
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::setAtlas(atlas::FieldSet * afieldset) const {
-  qg_fields_set_atlas_f90(keyFlds_, vars_, afieldset->get());
+  // qg_fields_set_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::toAtlas(atlas::FieldSet * afieldset) const {
-  qg_fields_to_atlas_f90(keyFlds_, vars_, afieldset->get());
+  // qg_fields_to_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::fromAtlas(atlas::FieldSet * afieldset) {
-  qg_fields_from_atlas_f90(keyFlds_, vars_, afieldset->get());
+  // qg_fields_from_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::read(const eckit::Configuration & config) {
@@ -165,7 +171,7 @@ void FieldsQG::read(const eckit::Configuration & config) {
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::analytic_init(const eckit::Configuration & config) {
-  qg_fields_analytic_init_f90(keyFlds_, config, time_);
+  qg_fields_analytic_init_f90(keyFlds_, config);
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::write(const eckit::Configuration & config) const {
@@ -179,78 +185,64 @@ double FieldsQG::norm() const {
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::print(std::ostream & os) const {
+  eckit::LocalConfiguration flds_info_;
+  qg_fields_info_f90(keyFlds_, flds_info_);
   // Resolution
-  int nx, ny, nz;
-  qg_fields_sizes_f90(keyFlds_, nx, ny, nz);
-  os << std::endl << "  Resolution = " << nx << ", " << ny << ", " << nz;
+  // int nx, ny, nz;
+  // qg_fields_sizes_f90(keyFlds_, nx, ny, nz);
+  os << std::endl << "  Print function to implement ";
 
-  // Min, max, RMS of fields
-  std::vector<std::string> var{"Streamfunction         :",
-                               "Potential vorticity    :",
-                               "U-wind                 :",
-                               "V-wind                 :",
-                               "Streamfunction LBC     :",
-                               "Potential vorticity LBC:"};
-  std::vector<int> vpresent(6);
-  std::vector<double> vmin(6);
-  std::vector<double> vmax(6);
-  std::vector<double> vrms(6);
-  qg_fields_gpnorm_f90(keyFlds_, vpresent.data(), vmin.data(), vmax.data(), vrms.data());
-  for (int jj = 0; jj < 6; ++jj) {
-    if (vpresent[jj] == 1) {
-      std::ios_base::fmtflags f(os.flags());
-      os << std::endl << "  " << var[jj] << std::scientific << std::setprecision(4)
-       << "  Min=" << std::setw(12) << vmin[jj]
-       << ", Max=" << std::setw(12) << vmax[jj]
-       << ", RMS=" << std::setw(12) << vrms[jj];
-      os.flags(f);
-    }
-  }
-}
-// -----------------------------------------------------------------------------
-bool FieldsQG::isForModel(const bool & nonlinear) const {
-  bool ok = true;
-  if (nonlinear) {
-    int lbc;
-    qg_fields_lbc_f90(keyFlds_, lbc);
-    ok = (lbc == 1);
-  }
-  return ok;
+  // // Min, max, RMS of fields
+  // std::vector<std::string> var{"Streamfunction         :",
+  //                              "Potential vorticity    :",
+  //                              "U-wind                 :",
+  //                              "V-wind                 :",
+  //                              "Streamfunction LBC     :",
+  //                              "Potential vorticity LBC:"};
+  // std::vector<int> vpresent(6);
+  // std::vector<double> vmin(6);
+  // std::vector<double> vmax(6);
+  // std::vector<double> vrms(6);
+  // qg_fields_gpnorm_f90(keyFlds_, vpresent.data(), vmin.data(), vmax.data(), vrms.data());
+  // for (int jj = 0; jj < 6; ++jj) {
+  //   if (vpresent[jj] == 1) {
+  //     std::ios_base::fmtflags f(os.flags());
+  //     os << std::endl << "  " << var[jj] << std::scientific << std::setprecision(4)
+  //      << "  Min=" << std::setw(12) << vmin[jj]
+  //      << ", Max=" << std::setw(12) << vmax[jj]
+  //      << ", RMS=" << std::setw(12) << vrms[jj];
+  //     os.flags(f);
+  //   }
+  // }
 }
 // -----------------------------------------------------------------------------
 oops::LocalIncrement FieldsQG::getLocal(const GeometryQGIterator & iter) const {
-  int nx, ny, nz;
-  qg_fields_sizes_f90(keyFlds_, nx, ny, nz);
-  std::vector<int> varlens(vars_.size());
-  for (unsigned int ii = 0; ii < vars_.size(); ii++) {
-    varlens[ii] = nz;
-  }
-  int lenvalues = std::accumulate(varlens.begin(), varlens.end(), 0);
-  std::vector<double> values(lenvalues);
-  qg_fields_getpoint_f90(keyFlds_, iter.toFortran(), values.size(), values[0]);
-  return oops::LocalIncrement(vars_, values, varlens);
+  // int nx, ny, nz;
+  // qg_fields_sizes_f90(keyFlds_, nx, ny, nz);
+  // std::vector<int> varlens(vars_.size());
+  // for (unsigned int ii = 0; ii < vars_.size(); ii++) {
+  //   varlens[ii] = nz;
+  // }
+  // int lenvalues = std::accumulate(varlens.begin(), varlens.end(), 0);
+  // std::vector<double> values(lenvalues);
+  // qg_fields_getpoint_f90(keyFlds_, iter.toFortran(), values.size(), values[0]);
+  // return oops::LocalIncrement(vars_, values, varlens);
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::setLocal(const oops::LocalIncrement & x, const GeometryQGIterator & iter) {
-  const std::vector<double> vals = x.getVals();
-  qg_fields_setpoint_f90(keyFlds_, iter.toFortran(), vals.size(), vals[0]);
+  // const std::vector<double> vals = x.getVals();
+  // qg_fields_setpoint_f90(keyFlds_, iter.toFortran(), vals.size(), vals[0]);
 }
 // -----------------------------------------------------------------------------
 size_t FieldsQG::serialSize() const {
-  size_t nn = 0;
-  int nx, ny, nz, lbc;
-  qg_fields_sizes_f90(keyFlds_, nx, ny, nz);
-  qg_fields_lbc_f90(keyFlds_, lbc);
-  nn += nx * ny * nz;
-  if (lbc == 1) {
-    nn += + 2 * (nx + 1) * nz;
-  }
+  size_t nn;
+  qg_fields_serialsize_f90(keyFlds_,nn); 
   nn += time_.serialSize();
   return nn;
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::serialize(std::vector<double> & vect)  const {
-  int size_fld = this->serialSize() - 2;
+  int size_fld = this->serialSize() - time_.serialSize();
 
   // Allocate space for fld, xb and qb
   std::vector<double> v_fld(size_fld, 0);

@@ -39,7 +39,7 @@ namespace qg {
 // -----------------------------------------------------------------------------
 StateQG::StateQG(const GeometryQG & resol, const oops::Variables & vars,
                  const util::DateTime & vt)
-  : fields_(new FieldsQG(resol, vars, lbc_, vt))
+  : fields_(new FieldsQG(resol, vars, vt))
 {
   oops::Log::trace() << "StateQG::StateQG created." << std::endl;
 }
@@ -47,10 +47,9 @@ StateQG::StateQG(const GeometryQG & resol, const oops::Variables & vars,
 StateQG::StateQG(const GeometryQG & resol, const eckit::Configuration & file)
   : fields_()
 {
-  oops::Variables vars({"x"});
-  if (file.has("state variables")) vars = oops::Variables(file, "state variables");
+  oops::Variables vars(file, "state variables");
   oops::Log::trace() << "StateQG::StateQG variables: " << vars << std::endl;
-  fields_.reset(new FieldsQG(resol, vars, 1, util::DateTime()));
+  fields_.reset(new FieldsQG(resol, vars, util::DateTime(file.getString("date"))));
   if (file.has("analytic_init")) {
     fields_->analytic_init(file);
   } else if (file.has("read_from_file")) {

@@ -54,8 +54,8 @@ class FieldsQG : public util::Printable,
   static const std::string classname() {return "qg::FieldsQG";}
 
 // Constructors and basic operators
-  FieldsQG(const GeometryQG &, const oops::Variables &, const bool &, const util::DateTime &);
-  FieldsQG(const FieldsQG &, const GeometryQG &);
+  FieldsQG(const GeometryQG &, const oops::Variables &, const util::DateTime &);
+  FieldsQG(const FieldsQG &, const GeometryQG &); // Not implemented
   FieldsQG(const FieldsQG &, const oops::Variables &);
   FieldsQG(const FieldsQG &, const bool);
   FieldsQG(const FieldsQG &);
@@ -98,7 +98,7 @@ class FieldsQG : public util::Printable,
 
   const int & toFortran() const {return keyFlds_;}
 
-  bool isForModel(const bool &) const;
+  bool isForModel(const bool &) const {};
 
   oops::LocalIncrement getLocal(const GeometryQGIterator &) const;
   void setLocal(const oops::LocalIncrement &, const GeometryQGIterator &);
@@ -113,7 +113,6 @@ class FieldsQG : public util::Printable,
   F90flds keyFlds_;
   std::shared_ptr<const GeometryQG> geom_;
   const oops::Variables vars_;
-  const bool lbc_;
   util::DateTime time_;
 };
 // -----------------------------------------------------------------------------

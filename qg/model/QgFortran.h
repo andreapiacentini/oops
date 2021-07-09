@@ -86,8 +86,8 @@ extern "C" {
 // -----------------------------------------------------------------------------
 //  Fields
 // -----------------------------------------------------------------------------
-  void qg_fields_create_f90(F90flds &, const F90geom &, const oops::Variables &, const bool &);
-  void qg_fields_create_from_other_f90(F90flds &, const F90flds &, const F90geom &);
+  void qg_fields_create_f90(F90flds &, const F90geom &, const oops::Variables &);
+  void qg_fields_create_from_other_f90(F90flds &, const F90flds &);
   void qg_fields_delete_f90(F90flds &);
   void qg_fields_zero_f90(const F90flds &);
   void qg_fields_ones_f90(const F90flds &);
@@ -102,13 +102,13 @@ extern "C" {
   void qg_fields_dot_prod_f90(const F90flds &, const F90flds &, double &);
   void qg_fields_add_incr_f90(const F90flds &, const F90flds &);
   void qg_fields_diff_incr_f90(const F90flds &, const F90flds &, const F90flds &);
-  void qg_fields_change_resol_f90(const F90flds &, const F90flds &);
+  // void qg_fields_change_resol_f90(const F90flds &, const F90flds &);
+  void qg_fields_info_f90(const F90flds &, const eckit::Configuration &);
   void qg_fields_read_file_f90(const F90flds &, const eckit::Configuration &,
                                util::DateTime &);
   void qg_fields_write_file_f90(const F90flds &, const eckit::Configuration &,
                                 const util::DateTime &);
-  void qg_fields_analytic_init_f90(const F90flds &, const eckit::Configuration &,
-                                   util::DateTime &);
+  void qg_fields_analytic_init_f90(const F90flds &, const eckit::Configuration &);
   void qg_fields_gpnorm_f90(const F90flds &, int[], double[], double[], double[]);
   void qg_fields_rms_f90(const F90flds &, double &);
   void qg_fields_sizes_f90(const F90flds &, int &, int &, int &);
@@ -121,6 +121,7 @@ extern "C" {
                                 atlas::field::FieldSetImpl *);
   void qg_fields_getpoint_f90(const F90flds&, const F90iter&, const int &, double &);
   void qg_fields_setpoint_f90(const F90flds&, const F90iter&, const int &, const double &);
+  void qg_fields_serialsize_f90(const F90flds &, std::size_t &);
   void qg_fields_serialize_f90(const F90flds &, const std::size_t &, double[]);
   void qg_fields_deserialize_f90(const F90flds &, const std::size_t &, const double[],
                                  const std::size_t &);

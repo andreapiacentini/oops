@@ -84,7 +84,6 @@ class StateQG : public util::Printable,
 
  private:
   void print(std::ostream &) const;
-  const bool lbc_ = true;
   std::unique_ptr<FieldsQG> fields_;
 };
 // -----------------------------------------------------------------------------

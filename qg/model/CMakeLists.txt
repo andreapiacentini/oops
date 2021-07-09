@@ -7,8 +7,8 @@ list( APPEND oops_qg_src_files
 #ChangeVarTLADQG.h
 #ErrorCovarianceQG.cc
 #ErrorCovarianceQG.h
-#FieldsQG.cc
-#FieldsQG.h
+FieldsQG.cc
+FieldsQG.h
 GeometryQG.cc
 GeometryQG.h
 GeometryQGIterator.cc
@@ -75,8 +75,8 @@ h5_write_mod.F90
 #QCmanager.h
 QgFortran.h
 QgTraits.h
-#StateQG.cc
-#StateQG.h
+StateQG.cc
+StateQG.h
 #TlmIdQG.cc
 #TlmIdQG.h
 #TlmQG.cc
@@ -97,8 +97,8 @@ qg_constants_mod.F90
 #qg_differential_solver_mod.F90
 #qg_error_covariance_interface.F90
 #qg_error_covariance_mod.F90
-#qg_fields_interface.F90
-#qg_fields_mod.F90
+qg_fields_interface.F90
+qg_fields_mod.F90
 qg_geom_interface.F90
 qg_geom_mod.F90
 qg_geom_iter_interface.F90
@@ -129,6 +129,7 @@ qg_geom_iter_mod.F90
 #qg_wspeed_mod.F90
 aq_constants_mod.F90
 aq_blas_mod.F90
+aq_field_io_mod.F90
 )
 
 ecbuild_add_library( TARGET   qg

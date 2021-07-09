@@ -203,12 +203,12 @@ ecbuild_add_test( TARGET  test_qg_geometry
 #                  LIBS    qg
 #                  TEST_DEPENDS test_qg_make_obs_4d_24h )
 #
-#ecbuild_add_test( TARGET  test_qg_state
-#                  SOURCES executables/TestState.cc
-#                  ARGS    "testinput/interfaces.yaml"
-#                  LIBS    qg
-#                  TEST_DEPENDS test_qg_truth )
-#
+ecbuild_add_test( TARGET  test_qg_state
+                  SOURCES executables/TestState.cc
+                  ARGS    "testinput/interfaces.yaml"
+                  LIBS    qg
+                  TEST_DEPENDS test_qg_truth )
+
 #ecbuild_add_test( TARGET  test_qg_model_aux
 #                  SOURCES executables/TestModelAuxControl.cc
 #                  ARGS    "testinput/interfaces.yaml"

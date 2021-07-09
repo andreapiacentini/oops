@@ -1,4 +1,4 @@
-state variables:
+variables: &vars
   - CO
   - O_3
   - NO_2
@@ -48,9 +48,30 @@ geometry:
   levels: 5
   orientation: up
 
+state test:
+  statefile:
+    date: 2010-07-05T07:00:00Z
+    filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001/HMGEMS02+2010070507.nc
+    state variables: *vars
+  statefileout:
+    datadir: Data
+    exp: out
+    type: fc
+    date: '2010-07-05T07:00:00Z'
+    filename: Data/HMGEMS02+2010070507_out.nc
+    state variables: *vars
+  state generate:
+    analytic_init: large-vortices
+    date: 2010-07-05T07:00:00Z
+    state variables: *vars
+  date: 2010-07-05T07:00:00Z
+  norm file: 0.57329011E-04
+  norm generated state: 1160.9687
+  tolerance: 1.0e-04
+
 input files:
   path: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001
-  reference date: '2010-07-04T00:00:00Z'
+  reference date: '2010-07-05T07:00:00Z'
 
 dirac:
   ndir: 3
