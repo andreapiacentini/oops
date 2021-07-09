@@ -22,6 +22,7 @@
 
 #include "eckit/config/Configuration.h"
 #include "eckit/config/LocalConfiguration.h"
+#include "eckit/utils/StringTools.h"
 
 #include "model/GeometryQG.h"
 #include "model/GomQG.h"
@@ -187,33 +188,27 @@ double FieldsQG::norm() const {
 void FieldsQG::print(std::ostream & os) const {
   eckit::LocalConfiguration flds_info_;
   qg_fields_info_f90(keyFlds_, flds_info_);
-  // Resolution
-  // int nx, ny, nz;
-  // qg_fields_sizes_f90(keyFlds_, nx, ny, nz);
-  os << std::endl << "  Print function to implement ";
-
-  // // Min, max, RMS of fields
-  // std::vector<std::string> var{"Streamfunction         :",
-  //                              "Potential vorticity    :",
-  //                              "U-wind                 :",
-  //                              "V-wind                 :",
-  //                              "Streamfunction LBC     :",
-  //                              "Potential vorticity LBC:"};
-  // std::vector<int> vpresent(6);
-  // std::vector<double> vmin(6);
-  // std::vector<double> vmax(6);
-  // std::vector<double> vrms(6);
-  // qg_fields_gpnorm_f90(keyFlds_, vpresent.data(), vmin.data(), vmax.data(), vrms.data());
-  // for (int jj = 0; jj < 6; ++jj) {
-  //   if (vpresent[jj] == 1) {
-  //     std::ios_base::fmtflags f(os.flags());
-  //     os << std::endl << "  " << var[jj] << std::scientific << std::setprecision(4)
-  //      << "  Min=" << std::setw(12) << vmin[jj]
-  //      << ", Max=" << std::setw(12) << vmax[jj]
-  //      << ", RMS=" << std::setw(12) << vrms[jj];
-  //     os.flags(f);
-  //   }
-  // }
+  std::string name = flds_info_.getString("name");
+  int nx = flds_info_.getInt("geometry.nx");
+  int ny = flds_info_.getInt("geometry.ny");
+  int nz = flds_info_.getInt("geometry.nz");
+  std::string orientation = flds_info_.getString("geometry.orientation");
+  std::string domain = flds_info_.getString("geometry.domain");
+  std::string model = flds_info_.getString("geometry.model");
+  os << std::endl << "Fields " << name << " for model " << model << std::endl;
+  os << "on domain " << domain << "(nx=" << nx << ", ny=" << ny << ")" << std::endl;
+  os << nz << " vertical levels (orientation " << orientation << ")" << std::endl;
+  std::vector<std::string> species = flds_info_.getStringVector("state variables");
+  os << "with " << species.size() << " variables" << std::endl;
+  double min, max, mean, stddev;
+  for (int i = 0; i<species.size(); i++) {
+    min = flds_info_.getDouble("statistics."+eckit::StringTools::trim(species[i])+".min");
+    max = flds_info_.getDouble("statistics."+eckit::StringTools::trim(species[i])+".max");
+    mean = flds_info_.getDouble("statistics."+eckit::StringTools::trim(species[i])+".mean");
+    stddev = flds_info_.getDouble("statistics."+eckit::StringTools::trim(species[i])+".stddev");
+    os << "Var. " << eckit::StringTools::trim(species[i]) << ": min = " << min << "; max = " << max
+       << "; mean = " << mean << "; stddev = " << stddev << std::endl ;
+  }
 }
 // -----------------------------------------------------------------------------
 oops::LocalIncrement FieldsQG::getLocal(const GeometryQGIterator & iter) const {
