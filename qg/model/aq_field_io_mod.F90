@@ -165,7 +165,7 @@ contains
       character(len=*),       intent(in) :: file
       type(datetime),         intent(in) :: date
 
-      integer :: ncid
+      integer :: ncid, il_create_mode
       integer :: il_dlat, il_dlon, il_dlev, il_vlat, il_vlon, il_vlev
       integer, allocatable :: ila_varid(:)
       integer :: ib, ib_var, ib_i, ib_j, ib_k
@@ -180,7 +180,10 @@ contains
       call aloc_3d%final()
       
       if( geom%fmpi%rank() == 0 ) then
-         call aq_nferr(nf90_create(trim(file), NF90_CLOBBER, ncid))
+         il_create_mode =      NF90_NETCDF4
+         il_create_mode = ior( NF90_CLASSIC_MODEL , il_create_mode)
+         il_create_mode = ior( NF90_CLOBBER       , il_create_mode)
+         call aq_nferr(nf90_create(trim(file), il_create_mode, ncid))
          call aq_nferr(nf90_put_att(ncid, NF90_GLOBAL, 'Conventions', 'CF-1.0'))
          call aq_nferr(nf90_put_att(ncid, NF90_GLOBAL, 'source','AQ-4DEnVAR'))
 !AP MISSING atlas_FieldSet %name() interfaces
@@ -302,6 +305,8 @@ contains
       if( geom%fmpi%rank() == 0 ) then
          call aq_nferr(nf90_close(ncid))
       end if
+
+      call geom%fmpi%barrier()
       
    end subroutine aq_write_mocage_nc
    
