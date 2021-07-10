@@ -18,7 +18,7 @@ use qg_fields_mod
 use qg_geom_mod
 use qg_geom_interface, only: qg_geom_registry
 use qg_geom_iter_mod
-use qg_locs_mod
+!AP use qg_locs_mod
 
 implicit none
 

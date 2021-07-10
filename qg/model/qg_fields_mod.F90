@@ -25,8 +25,8 @@ use qg_geom_mod
 use aq_constants_mod
 use aq_blas_mod
 use aq_field_io_mod
-use qg_interp_mod
-use qg_locs_mod
+!AP use qg_interp_mod
+!AP use qg_locs_mod
 use random_mod
 
 implicit none
@@ -55,6 +55,7 @@ type, extends(atlas_FieldSet) :: qg_fields
   type(datetime)                :: date
   character(len=:), allocatable :: var_name(:)
   type(qg_geom), pointer        :: geom
+  integer                       :: mod_levels
   type(fckit_mpi_comm)          :: fmpi
   integer                       :: prec
   integer                       :: mpi_kind
@@ -168,6 +169,7 @@ subroutine aq_field_create(self, geom, vars, name, date, kind)
   self%var_name = vars%varlist()
   !
   self%geom => geom
+  self%mod_levels = self%geom%levels
   self%fmpi = geom%fmpi
   self%locsize = self%geom%fs_3d%size()*self%geom%levels
   !
@@ -227,6 +229,7 @@ subroutine aq_field_create_from_other(self, other, name, date, kind)
   self%var_name(:) = other%var_name(:)
   !
   self%geom => other%geom
+  self%mod_levels = self%geom%levels
   self%fmpi = self%geom%fmpi
   self%locsize = self%geom%fs_3d%size()*self%geom%levels
   !
@@ -1122,7 +1125,7 @@ subroutine aq_field_read(self, config, date)
 
   if (file(dotpos+1:strlen) == 'nc') then
      if (trim(self%geom%model) == "MOCAGE") then
-        call aq_read_mocage_nc(self, self%var_name, self%geom, file, vdate)
+        call aq_read_mocage_nc(self, self%var_name, self%geom, self%mod_levels, file, vdate)
      else
         call abor1_ftn('NetCDF input only coded for MOCAGE')
      end if
@@ -1151,8 +1154,8 @@ subroutine aq_field_write(self, config, date)
   if (file(dotpos+1:strlen) == 'nc') then
      if (trim(self%geom%model) == "MOCAGE") then
 !AP MISSING atlas_FieldSet %name() interfaces
-!AP            call aq_write_mocage_nc(self, self%var_name, self%geom, file)
-        call aq_write_mocage_nc(self, self%fs_name, self%var_name, self%geom, file, vdate)
+!AP        call aq_write_mocage_nc(self, self%var_name, self%geom, self%mod_levels, file, vdate)
+        call aq_write_mocage_nc(self, self%fs_name, self%var_name, self%geom, self%mod_levels, file, vdate)
 !AP END
      else
         call abor1_ftn('NetCDF output only coded for MOCAGE')

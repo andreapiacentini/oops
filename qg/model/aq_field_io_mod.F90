@@ -54,15 +54,17 @@ contains
       
    end subroutine aq_write_field_gmsh
 
-   subroutine aq_read_mocage_nc(afset, vars, geom, file, date)
+   subroutine aq_read_mocage_nc(afset, vars, geom, mod_levels, file, date)
       
       class(atlas_FieldSet),  intent(inout) :: afset
       character(len=*),       intent(in)    :: vars(:)
       type(qg_geom), pointer, intent(in)    :: geom
+      integer,                intent(inout) :: mod_levels
       character(len=*),       intent(in)    :: file
       type(datetime),         intent(in)    :: date
 
-      integer :: ncid, varid, dimid
+      integer :: ncid, varid, dimid, nblevels
+      integer, allocatable :: mod_levs(:)
       type(atlas_Field) :: afld
       real(aq_single), pointer :: flds(:,:)
       real(aq_real), pointer :: fldd(:,:)
@@ -94,7 +96,12 @@ contains
             &               geom%levels))
       end if
       call aq_nferr(nf90_inq_dimid(ncid, "lev", dimid))
-      call aq_nferr(nf90_inquire_dimension(ncid, dimid, len = geom%mod_levels))
+      call aq_nferr(nf90_inquire_dimension(ncid, dimid, len = nblevels))
+      allocate(mod_levs(nblevels))
+      call aq_nferr(nf90_inq_varid(ncid, "lev", varid))
+      call aq_nferr(nf90_get_var(ncid, varid, mod_levs))
+      mod_levels = maxval(mod_levs)
+      deallocate(mod_levs)
       ll_up = (geom%orientation == "up")
       do ib_var = 1, size(vars)
          afld = afset%field(trim(vars(ib_var)))
@@ -106,11 +113,11 @@ contains
          call aq_nferr(nf90_inq_varid(ncid, trim(vars(ib_var)), varid))
          if (ll_sgl) then
             call aq_nferr(nf90_get_var(ncid, varid, ncbuff3ds, &
-               &                       start = [geom%bbox_imin, geom%bbox_jmin, geom%mod_levels-geom%levels+1], &
+               &                       start = [geom%bbox_imin, geom%bbox_jmin, nblevels-geom%levels+1], &
                &                       count = shape(ncbuff3ds)))
          else
             call aq_nferr(nf90_get_var(ncid, varid, ncbuff3dd, &
-               &                       start = [geom%bbox_imin, geom%bbox_jmin, geom%mod_levels-geom%levels+1], &
+               &                       start = [geom%bbox_imin, geom%bbox_jmin, nblevels-geom%levels+1], &
                &                       count = shape(ncbuff3dd)))
          end if
          do ib_j = geom%fs_3d%j_begin(), geom%fs_3d%j_end()
@@ -144,8 +151,8 @@ contains
    end subroutine aq_read_mocage_nc
    
 !AP MISSING atlas_FieldSet %name() interfaces
-!AP   subroutine aq_write_mocage_nc(afset, vars, geom, file, date)
-   subroutine aq_write_mocage_nc(afset, name, vars, geom, file, date)
+!AP   subroutine aq_write_mocage_nc(afset, vars, geom, mod_levels, file, date)
+   subroutine aq_write_mocage_nc(afset, name, vars, geom, mod_levels, file, date)
 !AP END
       
       class(atlas_FieldSet),  intent(in) :: afset
@@ -154,15 +161,16 @@ contains
 !AP END
       character(len=*),       intent(in) :: vars(:)
       type(qg_geom), pointer, intent(in) :: geom
+      integer,                intent(in) :: mod_levels
       character(len=*),       intent(in) :: file
       type(datetime),         intent(in) :: date
 
       integer :: ncid
       integer :: il_dlat, il_dlon, il_dlev, il_vlat, il_vlon, il_vlev
       integer, allocatable :: ila_varid(:)
-      integer :: ib, ib_var
+      integer :: ib, ib_var, ib_i, ib_j, ib_k
       type(atlas_Field) :: aloc_3d, aglo_3d
-      real(aq_single), pointer :: loc_3ds(:,:), glo_3ds(:,:,:)
+      real(aq_single), pointer :: loc_3ds(:,:), glo_3ds(:,:,:), glo_3dn(:,:,:)
       real(aq_real), pointer :: loc_3dd(:,:), glo_3dd(:,:,:)
       character(len=20) :: cl_date
       logical :: ll_sgl
@@ -212,7 +220,7 @@ contains
          
          do ib_var = 1, size(vars)
             call aq_nferr(nf90_def_var(ncid,trim(vars(ib_var)),NF90_FLOAT,&
-                  &                   [il_dlev,il_dlon,il_dlat],ila_varid(ib_var)))
+                  &                   [il_dlon,il_dlat,il_dlev],ila_varid(ib_var)))
             call aq_nferr(nf90_put_att(ncid,ila_varid(ib_var),'units','ppb'))
          end do
          
@@ -226,13 +234,16 @@ contains
 
          if ( geom%orientation == "up" ) then
             call aq_nferr(nf90_put_var(ncid,il_vlev, &
-               & real([(geom%mod_levels-ib+1,ib=1,geom%levels)],kind=aq_single)))
+               & real([(mod_levels-ib+1,ib=1,geom%levels)],kind=aq_single)))
          else
             call aq_nferr(nf90_put_var(ncid,il_vlev, &
-               & real([(geom%mod_levels-geom%levels+ib,ib=1,geom%levels)],kind=aq_single)))
+               & real([(mod_levels-geom%levels+ib,ib=1,geom%levels)],kind=aq_single)))
          end if
          
       end if
+
+      if( geom%fmpi%rank() == 0 ) &
+         & allocate(glo_3dn(geom%grid%nx(1),geom%grid%ny(),geom%levels))
 
       if (ll_sgl) then
          aglo_3d = geom%fs_3d%create_field(name='globuff',    &
@@ -246,10 +257,18 @@ contains
             call aloc_3d%data(loc_3ds) 
             call geom%fs_3d%gather(aloc_3d, aglo_3d)
             call aloc_3d%final()
-            if( geom%fmpi%rank() == 0 ) &
-               & call aq_nferr(nf90_put_var(ncid,ila_varid(ib_var), &
-               &                            glo_3ds))
+            if( geom%fmpi%rank() == 0 ) then
+               do ib_j = 1,geom%grid%ny()
+                  do ib_i = 1,geom%grid%nx(1)
+                     do ib_k = 1,geom%levels
+                        glo_3dn(ib_i,ib_j,ib_k) = glo_3ds(ib_k,ib_i,ib_j)
+                     end do
+                  end do
+               end do
+               call aq_nferr(nf90_put_var(ncid,ila_varid(ib_var),glo_3dn))
+            end if
          end do
+         
       else
          aglo_3d = geom%fs_3d%create_field(name='globuff',    &
             &                              kind=atlas_real(aq_real), &
@@ -262,12 +281,22 @@ contains
             call aloc_3d%data(loc_3dd) 
             call geom%fs_3d%gather(aloc_3d, aglo_3d)
             call aloc_3d%final()
-            if( geom%fmpi%rank() == 0 ) &
-               & call aq_nferr(nf90_put_var(ncid,ila_varid(ib_var), &
-               &                            real(glo_3dd,kind=aq_single)))
+            if( geom%fmpi%rank() == 0 ) then
+               do ib_j = 1,geom%grid%ny()
+                  do ib_i = 1,geom%grid%nx(1)
+                     do ib_k = 1,geom%levels
+                        glo_3dn(ib_i,ib_j,ib_k) = real(glo_3dd(ib_k,ib_i,ib_j))
+                     end do
+                  end do
+               end do
+               call aq_nferr(nf90_put_var(ncid,ila_varid(ib_var),glo_3dn))
+            end if
          end do
+
       end if
       
+      if( geom%fmpi%rank() == 0 ) deallocate(glo_3dn)
+
       call aglo_3d%final()
       
       if( geom%fmpi%rank() == 0 ) then

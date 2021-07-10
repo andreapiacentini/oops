@@ -17,7 +17,6 @@ module qg_geom_mod
       type(atlas_functionspace_StructuredColumns) :: fs_2d
       type(atlas_functionspace_StructuredColumns) :: fs_3d
       integer(atlas_kind_idx)                     :: levels
-      integer(atlas_kind_idx)                     :: mod_levels
       integer(atlas_kind_idx)                     :: halo
       integer(atlas_kind_idx)                     :: bbox_imin, bbox_imax, bbox_isz
       integer(atlas_kind_idx)                     :: bbox_jmin, bbox_jmax, bbox_jsz
@@ -85,7 +84,6 @@ contains
       end if
       !
       call config%get_or_die("levels",self%levels)
-      self%mod_levels = self%levels
       !
       self%nz = self%levels
       !
@@ -144,7 +142,6 @@ contains
       self%model = other%model
       self%orientation = other%orientation
       self%levels = other%levels
-      self%mod_levels = other%mod_levels
       self%halo = other%halo
       self%bbox_imin = other%bbox_imin 
       self%bbox_imax = other%bbox_imax 

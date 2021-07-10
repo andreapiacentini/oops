@@ -195,18 +195,18 @@ void FieldsQG::print(std::ostream & os) const {
   std::string orientation = flds_info_.getString("geometry.orientation");
   std::string domain = flds_info_.getString("geometry.domain");
   std::string model = flds_info_.getString("geometry.model");
-  os << std::endl << "Fields " << name << " for model " << model << std::endl;
-  os << "on domain " << domain << "(nx=" << nx << ", ny=" << ny << ")" << std::endl;
-  os << nz << " vertical levels (orientation " << orientation << ")" << std::endl;
+  os << std::endl << "  Fields " << name << " for model " << model << std::endl;
+  os << "  on domain " << domain << "(nx=" << nx << ", ny=" << ny << ")" << std::endl;
+  os << "  " << nz << " vertical levels (orientation " << orientation << ")" << std::endl;
   std::vector<std::string> species = flds_info_.getStringVector("state variables");
-  os << "with " << species.size() << " variables" << std::endl;
+  os << "  with " << species.size() << " variables" << std::endl;
   double min, max, mean, stddev;
   for (int i = 0; i<species.size(); i++) {
     min = flds_info_.getDouble("statistics."+eckit::StringTools::trim(species[i])+".min");
     max = flds_info_.getDouble("statistics."+eckit::StringTools::trim(species[i])+".max");
     mean = flds_info_.getDouble("statistics."+eckit::StringTools::trim(species[i])+".mean");
     stddev = flds_info_.getDouble("statistics."+eckit::StringTools::trim(species[i])+".stddev");
-    os << "Var. " << eckit::StringTools::trim(species[i]) << ": min = " << min << "; max = " << max
+    os << "  Var. " << eckit::StringTools::trim(species[i]) << ": min = " << min << "; max = " << max
        << "; mean = " << mean << "; stddev = " << stddev << std::endl ;
   }
 }
