@@ -73,17 +73,66 @@ increment test:
   date: 2010-07-05T07:00:00Z
 inc variables: *vars
 
-input files:
-  path: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001
-  reference date: '2010-07-05T07:00:00Z'
+window begin: 2010-07-04T09:00:00Z
+window end: 2010-07-04T10:00:00Z
 
-dirac:
-  ndir: 3
-  ixdir: [ 120,  200,    30]    
-  iydir: [  32,  180,    95]    
-  ildir: [   1,    1,     3]   
-  ifdir: ['CO', 'CO', 'O_3'] 
-
-settings:
-  processors: 6
-  precision: single
+locations: {}
+observations:
+- obs error:
+    covariance model: diagonal
+  geovals:
+    filename: Data/truth.obs4d_24h.stream.gom
+    state variables: [x]
+    norm: 5190236838.6347504
+  obs space:
+    obsdatain:
+      obsfile: Data/HDAT+20100704.h5
+    obsdataout:
+      obsfile: Data/HSTAT+20100704.h5
+    obs type: CO
+    instr name: AIRBASE_CO
+  obs operator:
+    obs type: Stream
+  linear obs operator test:
+    coef TL: 1.e-4
+    tolerance AD: 1.0e-10
+    tolerance TL: 1.0e-6
+  obs bias:
+    stream: -10.0
+    covariance:
+      stream: 2.0e7
+  obs bias test:
+    norm: 10.0
+    relative tolerance: 0.0
+  rms ref: 183502589.5028424
+  reference global nobs: 800
+  tolerance: 1.0e-8
+- obs error:
+    covariance model: diagonal
+  geovals:
+    filename: Data/truth.obs4d_24h.stream.gom
+    state variables: [x]
+    norm: 5190236838.6347504
+  obs space:
+    obsdatain:
+      obsfile: Data/HDAT+20100704.h5
+    obsdataout:
+      obsfile: Data/HSTAT+20100704.h5
+    obs type: O3
+    instr name: AIRBASE_O3
+  obs operator:
+    obs type: Stream
+  linear obs operator test:
+    coef TL: 1.e-4
+    tolerance AD: 1.0e-10
+    tolerance TL: 1.0e-6
+  obs bias:
+    stream: -10.0
+    covariance:
+      stream: 2.0e7
+  obs bias test:
+    norm: 10.0
+    relative tolerance: 0.0
+  rms ref: 183502589.5028424
+  reference global nobs: 800
+  tolerance: 1.0e-8

@@ -18,8 +18,8 @@ use oops_variables_mod
 use qg_constants_mod
 use qg_geom_mod
 use qg_locs_mod
-use qg_projection_mod
-use qg_tools_mod
+! use qg_projection_mod
+! use qg_tools_mod
 use random_mod
 
 implicit none
@@ -517,31 +517,31 @@ filename = str
 call fckit_log%info('qg_gom_read_file: reading '//trim(filename))
 
 ! Open NetCDF file
-call ncerr(nf90_open(trim(filename)//'.nc',nf90_nowrite,ncid))
+! call ncerr(nf90_open(trim(filename)//'.nc',nf90_nowrite,ncid))
 
-! Get dimension id
-call ncerr(nf90_inq_dimid(ncid,'nobs',nobs_id))
+! ! Get dimension id
+! call ncerr(nf90_inq_dimid(ncid,'nobs',nobs_id))
 
-! Get dimension
-call ncerr(nf90_inquire_dimension(ncid,nobs_id,len=nobs))
+! ! Get dimension
+! call ncerr(nf90_inquire_dimension(ncid,nobs_id,len=nobs))
 
-! GOM setup
-call qg_gom_setup(self,nobs)
+! ! GOM setup
+! call qg_gom_setup(self,nobs)
 
-! Get variables ids
-if (self%vars%has('x')) call ncerr(nf90_inq_varid(ncid,'x',x_id))
-if (self%vars%has('q')) call ncerr(nf90_inq_varid(ncid,'q',q_id))
-if (self%vars%has('u')) call ncerr(nf90_inq_varid(ncid,'u',u_id))
-if (self%vars%has('v')) call ncerr(nf90_inq_varid(ncid,'v',v_id))
+! ! Get variables ids
+! if (self%vars%has('x')) call ncerr(nf90_inq_varid(ncid,'x',x_id))
+! if (self%vars%has('q')) call ncerr(nf90_inq_varid(ncid,'q',q_id))
+! if (self%vars%has('u')) call ncerr(nf90_inq_varid(ncid,'u',u_id))
+! if (self%vars%has('v')) call ncerr(nf90_inq_varid(ncid,'v',v_id))
 
-! Get variables
-if (self%vars%has('x')) call ncerr(nf90_get_var(ncid,x_id,self%x))
-if (self%vars%has('q')) call ncerr(nf90_get_var(ncid,q_id,self%q))
-if (self%vars%has('u')) call ncerr(nf90_get_var(ncid,u_id,self%u))
-if (self%vars%has('v')) call ncerr(nf90_get_var(ncid,v_id,self%v))
+! ! Get variables
+! if (self%vars%has('x')) call ncerr(nf90_get_var(ncid,x_id,self%x))
+! if (self%vars%has('q')) call ncerr(nf90_get_var(ncid,q_id,self%q))
+! if (self%vars%has('u')) call ncerr(nf90_get_var(ncid,u_id,self%u))
+! if (self%vars%has('v')) call ncerr(nf90_get_var(ncid,v_id,self%v))
 
-! Close NetCDF file
-call ncerr(nf90_close(ncid))
+! ! Close NetCDF file
+! call ncerr(nf90_close(ncid))
 
 end subroutine qg_gom_read_file
 ! ------------------------------------------------------------------------------
@@ -568,28 +568,28 @@ filename = str
 call fckit_log%info('qg_gom_write_file: writing '//trim(filename))
 
 ! Create NetCDF file
-call ncerr(nf90_create(trim(filename)//'.nc',or(nf90_clobber,nf90_64bit_offset),ncid))
+! call ncerr(nf90_create(trim(filename)//'.nc',or(nf90_clobber,nf90_64bit_offset),ncid))
 
-! Define dimensions
-call ncerr(nf90_def_dim(ncid,'nobs',self%nobs,nobs_id))
+! ! Define dimensions
+! call ncerr(nf90_def_dim(ncid,'nobs',self%nobs,nobs_id))
 
-! Define variables
-if (self%vars%has('x')) call ncerr(nf90_def_var(ncid,'x',nf90_double,(/nobs_id/),x_id))
-if (self%vars%has('q')) call ncerr(nf90_def_var(ncid,'q',nf90_double,(/nobs_id/),q_id))
-if (self%vars%has('u')) call ncerr(nf90_def_var(ncid,'u',nf90_double,(/nobs_id/),u_id))
-if (self%vars%has('v')) call ncerr(nf90_def_var(ncid,'v',nf90_double,(/nobs_id/),v_id))
+! ! Define variables
+! if (self%vars%has('x')) call ncerr(nf90_def_var(ncid,'x',nf90_double,(/nobs_id/),x_id))
+! if (self%vars%has('q')) call ncerr(nf90_def_var(ncid,'q',nf90_double,(/nobs_id/),q_id))
+! if (self%vars%has('u')) call ncerr(nf90_def_var(ncid,'u',nf90_double,(/nobs_id/),u_id))
+! if (self%vars%has('v')) call ncerr(nf90_def_var(ncid,'v',nf90_double,(/nobs_id/),v_id))
 
-! End definitions
-call ncerr(nf90_enddef(ncid))
+! ! End definitions
+! call ncerr(nf90_enddef(ncid))
 
-! Put variables
-if (self%vars%has('x')) call ncerr(nf90_put_var(ncid,x_id,self%x))
-if (self%vars%has('q')) call ncerr(nf90_put_var(ncid,q_id,self%q))
-if (self%vars%has('u')) call ncerr(nf90_put_var(ncid,u_id,self%u))
-if (self%vars%has('v')) call ncerr(nf90_put_var(ncid,v_id,self%v))
+! ! Put variables
+! if (self%vars%has('x')) call ncerr(nf90_put_var(ncid,x_id,self%x))
+! if (self%vars%has('q')) call ncerr(nf90_put_var(ncid,q_id,self%q))
+! if (self%vars%has('u')) call ncerr(nf90_put_var(ncid,u_id,self%u))
+! if (self%vars%has('v')) call ncerr(nf90_put_var(ncid,v_id,self%v))
 
-! Close NetCDF file
-call ncerr(nf90_close(ncid))
+! ! Close NetCDF file
+! call ncerr(nf90_close(ncid))
 
 end subroutine qg_gom_write_file
 ! ------------------------------------------------------------------------------
@@ -625,30 +625,30 @@ if (.not.self%lalloc) call abor1_ftn('qg_gom_analytic init: gom not allocated')
 call f_conf%get_or_die("analytic_init",str)
 ic = str
 call fckit_log%info('qg_gom_analytic_init: ic = '//trim(ic))
-do iloc=1,locs%nlocs()
-  select case (trim(ic))
-  case ('baroclinic-instability')
-    ! Go to cartesian coordinates
-    call lonlat_to_xy(lonlat(1,iloc),lonlat(2,iloc),x,y)
+! do iloc=1,locs%nlocs()
+!   select case (trim(ic))
+!   case ('baroclinic-instability')
+!     ! Go to cartesian coordinates
+!     call lonlat_to_xy(lonlat(1,iloc),lonlat(2,iloc),x,y)
 
-    ! Compute values for baroclinic instability
-    if (self%vars%has('x')) call baroclinic_instability(x,y,z(iloc),'x',self%x(iloc))
-    if (self%vars%has('q')) call baroclinic_instability(x,y,z(iloc),'q',self%q(iloc))
-    if (self%vars%has('u')) call baroclinic_instability(x,y,z(iloc),'u',self%u(iloc))
-    if (self%vars%has('v')) call baroclinic_instability(x,y,z(iloc),'v',self%v(iloc))
-  case ('large-vortices')
-    ! Go to cartesian coordinates
-    call lonlat_to_xy(lonlat(1,iloc),lonlat(2,iloc),x,y)
+!     ! Compute values for baroclinic instability
+!     if (self%vars%has('x')) call baroclinic_instability(x,y,z(iloc),'x',self%x(iloc))
+!     if (self%vars%has('q')) call baroclinic_instability(x,y,z(iloc),'q',self%q(iloc))
+!     if (self%vars%has('u')) call baroclinic_instability(x,y,z(iloc),'u',self%u(iloc))
+!     if (self%vars%has('v')) call baroclinic_instability(x,y,z(iloc),'v',self%v(iloc))
+!   case ('large-vortices')
+!     ! Go to cartesian coordinates
+!     call lonlat_to_xy(lonlat(1,iloc),lonlat(2,iloc),x,y)
 
-    ! Compute values for large vortices
-    if (self%vars%has('x')) call large_vortices(x,y,z(iloc),'x',self%x(iloc))
-    if (self%vars%has('q')) call large_vortices(x,y,z(iloc),'q',self%q(iloc))
-    if (self%vars%has('u')) call large_vortices(x,y,z(iloc),'u',self%u(iloc))
-    if (self%vars%has('v')) call large_vortices(x,y,z(iloc),'v',self%v(iloc))
-  case default
-    call abor1_ftn('qg_gom_analytic_init: unknown initialization')
-  endselect
-enddo
+!     ! Compute values for large vortices
+!     if (self%vars%has('x')) call large_vortices(x,y,z(iloc),'x',self%x(iloc))
+!     if (self%vars%has('q')) call large_vortices(x,y,z(iloc),'q',self%q(iloc))
+!     if (self%vars%has('u')) call large_vortices(x,y,z(iloc),'u',self%u(iloc))
+!     if (self%vars%has('v')) call large_vortices(x,y,z(iloc),'v',self%v(iloc))
+!   case default
+!     call abor1_ftn('qg_gom_analytic_init: unknown initialization')
+!   endselect
+! enddo
 
 call lonlat_field%final()
 call z_field%final()

@@ -16,12 +16,12 @@ use fckit_configuration_module, only: fckit_configuration
 use fckit_log_module, only: fckit_log
 use iso_c_binding
 use kinds
-use netcdf
-use qg_constants_mod
+! use netcdf
+! use qg_constants_mod
 use qg_locs_mod
 use qg_obsvec_mod
-use qg_projection_mod
-use qg_tools_mod
+! use qg_projection_mod
+! use qg_tools_mod
 use random_mod
 use string_f_c_mod
 use H5_UTILS_MOD, ONLY : ip_hdf_namelen, ig_hdfverb, ip_hid_t
@@ -520,81 +520,91 @@ type(column_data),pointer :: jcol
 character(len=6) :: igrpchar
 character(len=50) :: stime
 
+! a_end_time = m_start_time + FLOAT(ig_nbwin*ig_win_length)
+! WRITE(cl_hstatname, &
+!    &    fmt="('HSTAT+',I4.4,I2.2,I2.2,I2.2,'+', &
+!    &    I4.4,I2.2,I2.2,I2.2,'.h5')") &
+!    &    m_start_time%year,m_start_time%month,m_start_time%day,m_start_time%hour, &
+!    &    a_end_time%year,a_end_time%month,a_end_time%day,a_end_time%hour
+
+! ! Create HSTAT.h5 output file
+! CALL CREATE_H5FILE(cl_hstatname, ig_hstat_id)
+
 ! Create NetCDF file
-call ncerr(nf90_create(trim(self%fileout),or(nf90_clobber,nf90_64bit_offset),ncid))
+! call ncerr(nf90_create(trim(self%fileout),or(nf90_clobber,nf90_64bit_offset),ncid))
 
-! Define dimensions
-call ncerr(nf90_def_dim(ncid,'nstrmax',50,nstrmax_id))
-call ncerr(nf90_def_dim(ncid,'ngrp',self%ngrp,ngrp_id))
+! ! Define dimensions
+! call ncerr(nf90_def_dim(ncid,'nstrmax',50,nstrmax_id))
+! call ncerr(nf90_def_dim(ncid,'ngrp',self%ngrp,ngrp_id))
 
-! Define variable
-call ncerr(nf90_def_var(ncid,'grpname',nf90_char,(/nstrmax_id,ngrp_id/),grpname_id))
+! ! Define variable
+! call ncerr(nf90_def_var(ncid,'grpname',nf90_char,(/nstrmax_id,ngrp_id/),grpname_id))
 
-! End definitions
-call ncerr(nf90_enddef(ncid))
+! ! End definitions
+! call ncerr(nf90_enddef(ncid))
 
-! Loop over groups
-igrp = 0
-jgrp => self%grphead
-do while (associated(jgrp))
-  igrp = igrp+1
-  if (jgrp%nobs > 0) then
-    write(igrpchar,'(i6.6)') igrp
-    ! Enter definitions mode
-    call ncerr(nf90_redef(ncid))
+! ! Loop over groups
+! igrp = 0
+! jgrp => self%grphead
+! do while (associated(jgrp))
+!   igrp = igrp+1
+!   if (jgrp%nobs > 0) then
+!     write(igrpchar,'(i6.6)') igrp
+!     ! Enter definitions mode
+!     call ncerr(nf90_redef(ncid))
 
-    ! Compute dimensions
-    ncol = 0
-    nlevmax = 0
-    jcol => jgrp%colhead
-    do while (associated(jcol))
-      ncol = ncol+1
-      nlevmax = max(jcol%nlev,nlevmax)
-      jcol => jcol%next
-    enddo
+!     ! Compute dimensions
+!     ncol = 0
+!     nlevmax = 0
+!     jcol => jgrp%colhead
+!     do while (associated(jcol))
+!       ncol = ncol+1
+!       nlevmax = max(jcol%nlev,nlevmax)
+!       jcol => jcol%next
+!     enddo
 
-    ! Define dimensions
-    call ncerr(nf90_def_dim(ncid,'nobs_'//igrpchar,jgrp%nobs,nobs_id))
-    call ncerr(nf90_def_dim(ncid,'ncol_'//igrpchar,ncol,ncol_id))
-    call ncerr(nf90_def_dim(ncid,'nlevmax_'//igrpchar,nlevmax,nlevmax_id))
+!     ! Define dimensions
+!     call ncerr(nf90_def_dim(ncid,'nobs_'//igrpchar,jgrp%nobs,nobs_id))
+!     call ncerr(nf90_def_dim(ncid,'ncol_'//igrpchar,ncol,ncol_id))
+!     call ncerr(nf90_def_dim(ncid,'nlevmax_'//igrpchar,nlevmax,nlevmax_id))
 
-    ! Define variable
-    call ncerr(nf90_def_var(ncid,'times_'//igrpchar,nf90_char,(/nstrmax_id,nobs_id/),times_id))
-    call ncerr(nf90_def_var(ncid,'nlev_'//igrpchar,nf90_int,(/ncol_id/),nlev_id))
-    call ncerr(nf90_def_var(ncid,'colname_'//igrpchar,nf90_char,(/nstrmax_id,ncol_id/),colname_id))
-    call ncerr(nf90_def_var(ncid,'values_'//igrpchar,nf90_double,(/nlevmax_id,ncol_id,nobs_id/),values_id))
+!     ! Define variable
+!     call ncerr(nf90_def_var(ncid,'times_'//igrpchar,nf90_char,(/nstrmax_id,nobs_id/),times_id))
+!     call ncerr(nf90_def_var(ncid,'nlev_'//igrpchar,nf90_int,(/ncol_id/),nlev_id))
+!     call ncerr(nf90_def_var(ncid,'colname_'//igrpchar,nf90_char,(/nstrmax_id,ncol_id/),colname_id))
+!     call ncerr(nf90_def_var(ncid,'values_'//igrpchar,nf90_double,(/nlevmax_id,ncol_id,nobs_id/),values_id))
 
-    ! End definitions
-    call ncerr(nf90_enddef(ncid))
+!     ! End definitions
+!     call ncerr(nf90_enddef(ncid))
 
-    ! Put variables
-    call ncerr(nf90_put_var(ncid,grpname_id,jgrp%grpname,(/1,igrp/),(/50,1/)))
-    do iobs=1,jgrp%nobs
-      call datetime_to_string(jgrp%times(iobs),stime)
-      call ncerr(nf90_put_var(ncid,times_id,stime,(/1,iobs/),(/50,1/)))
-    end do
+!     ! Put variables
+!     call ncerr(nf90_put_var(ncid,grpname_id,jgrp%grpname,(/1,igrp/),(/50,1/)))
+!     do iobs=1,jgrp%nobs
+!       call datetime_to_string(jgrp%times(iobs),stime)
+!       call ncerr(nf90_put_var(ncid,times_id,stime,(/1,iobs/),(/50,1/)))
+!     end do
 
-    ! Loop over columns
-    icol = 0
-    jcol => jgrp%colhead
-    do while (associated(jcol))
-      icol = icol+1
+!     ! Loop over columns
+!     icol = 0
+!     jcol => jgrp%colhead
+!     do while (associated(jcol))
+!       icol = icol+1
 
-      ! Put variables
-      call ncerr(nf90_put_var(ncid,nlev_id,jcol%nlev,(/icol/)))
-      call ncerr(nf90_put_var(ncid,colname_id,jcol%colname,(/1,icol/),(/50,1/)))
-      call ncerr(nf90_put_var(ncid,values_id,jcol%values(1:jcol%nlev,:),(/1,icol,1/),(/jcol%nlev,1,jgrp%nobs/)))
+!       ! Put variables
+!       call ncerr(nf90_put_var(ncid,nlev_id,jcol%nlev,(/icol/)))
+!       call ncerr(nf90_put_var(ncid,colname_id,jcol%colname,(/1,icol/),(/50,1/)))
+!       call ncerr(nf90_put_var(ncid,values_id,jcol%values(1:jcol%nlev,:),(/1,icol,1/),(/jcol%nlev,1,jgrp%nobs/)))
 
-      ! Update
-      jcol => jcol%next
-    enddo
-  endif
-  ! Update
-  jgrp=>jgrp%next
-end do
+!       ! Update
+!       jcol => jcol%next
+!     enddo
+!   endif
+!   ! Update
+!   jgrp=>jgrp%next
+! end do
 
-! Close NetCDF file
-call ncerr(nf90_close(ncid))
+! ! Close NetCDF file
+! call ncerr(nf90_close(ncid))
 
 end subroutine qg_obsdb_write
 ! ------------------------------------------------------------------------------
@@ -659,13 +669,13 @@ real(kind_real) :: x(nlocs),y(nlocs),z(nlocs),lon(nlocs),lat(nlocs)
 type(datetime) :: now
 
 ! Generate random locations
-call uniform_distribution(x,0.0_kind_real,domain_zonal,rseed)
-call uniform_distribution(y,0.0_kind_real,domain_meridional,rseed)
-call uniform_distribution(z,0.0_kind_real,domain_depth,rseed)
+! call uniform_distribution(x,0.0_kind_real,domain_zonal,rseed)
+! call uniform_distribution(y,0.0_kind_real,domain_meridional,rseed)
+! call uniform_distribution(z,0.0_kind_real,domain_depth,rseed)
 
 ! Convert to lon/lat
 do jobs=1,nlocs
-  call xy_to_lonlat(x(jobs),y(jobs),lon(jobs),lat(jobs))
+  ! call xy_to_lonlat(x(jobs),y(jobs),lon(jobs),lat(jobs))
 enddo
 
 ! Setup observation vector
