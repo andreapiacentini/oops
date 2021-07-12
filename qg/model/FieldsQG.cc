@@ -156,14 +156,20 @@ void FieldsQG::diff(const FieldsQG & x1, const FieldsQG & x2) {
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::setAtlas(atlas::FieldSet * afieldset) const {
+  oops::Log::warning() << " Atlas conversion not yet implemented. To be discussed with Benjamin. "
+   << std::endl;
   // qg_fields_set_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::toAtlas(atlas::FieldSet * afieldset) const {
+  oops::Log::warning() << " Atlas conversion not yet implemented. To be discussed with Benjamin. "
+   << std::endl;
   // qg_fields_to_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::fromAtlas(atlas::FieldSet * afieldset) {
+  oops::Log::warning() << " Atlas conversion not yet implemented. To be discussed with Benjamin. "
+   << std::endl;
   // qg_fields_from_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------
@@ -230,20 +236,22 @@ void FieldsQG::setLocal(const oops::LocalIncrement & x, const GeometryQGIterator
 }
 // -----------------------------------------------------------------------------
 size_t FieldsQG::serialSize() const {
+  int nn_fld;
   size_t nn;
-  qg_fields_serialsize_f90(keyFlds_,nn); 
-  nn += time_.serialSize();
+  qg_fields_serialsize_f90(keyFlds_,nn_fld);
+  nn = size_t(nn_fld) + time_.serialSize();
   return nn;
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::serialize(std::vector<double> & vect)  const {
-  int size_fld = this->serialSize() - time_.serialSize();
+  std::size_t size_fld = this->serialSize() - time_.serialSize();
+  int fsize_fld = int(size_fld);
 
   // Allocate space for fld, xb and qb
   std::vector<double> v_fld(size_fld, 0);
 
   // Serialize the field
-  qg_fields_serialize_f90(keyFlds_, size_fld, v_fld.data());
+  qg_fields_serialize_f90(keyFlds_, fsize_fld, v_fld.data());
   vect.insert(vect.end(), v_fld.begin(), v_fld.end());
 
   // Serialize the date and time
@@ -251,7 +259,10 @@ void FieldsQG::serialize(std::vector<double> & vect)  const {
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::deserialize(const std::vector<double> & vect, size_t & index) {
-  qg_fields_deserialize_f90(keyFlds_, vect.size(), vect.data(), index);
+  int findex = int(index);
+  int fsize = int(vect.size());
+  qg_fields_deserialize_f90(keyFlds_, fsize, vect.data(), findex);
+  index = size_t(findex);
   time_.deserialize(vect, index);
 }
 // -----------------------------------------------------------------------------

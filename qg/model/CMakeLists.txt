@@ -23,8 +23,8 @@ h5_read_mod.F90
 h5_selection_mod.F90
 h5_utils_mod.F90
 h5_write_mod.F90
-#IncrementQG.cc
-#IncrementQG.h
+IncrementQG.cc
+IncrementQG.h
 #LocationsQG.cc
 #LocationsQG.h
 #LocalizationMatrixQG.cc

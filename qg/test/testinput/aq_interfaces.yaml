@@ -69,6 +69,10 @@ state test:
   norm generated state: 1160.96861298991234
   tolerance: 1.0e-08
 
+increment test:
+  date: 2010-07-05T07:00:00Z
+inc variables: *vars
+
 input files:
   path: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001
   reference date: '2010-07-05T07:00:00Z'

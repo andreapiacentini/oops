@@ -221,12 +221,12 @@ ecbuild_add_test( TARGET  test_qg_state
 #                  LIBS    qg
 #                  TEST_DEPENDS test_qg_truth )
 #
-#ecbuild_add_test( TARGET  test_qg_increment
-#                  SOURCES executables/TestIncrement.cc
-#                  ARGS    "testinput/interfaces.yaml"
-#                  LIBS    qg
-#                  TEST_DEPENDS test_qg_truth )
-#
+ecbuild_add_test( TARGET  test_qg_increment
+                  SOURCES executables/TestIncrement.cc
+                  ARGS    "testinput/interfaces.yaml"
+                  LIBS    qg
+                  TEST_DEPENDS test_qg_truth )
+
 #ecbuild_add_test( TARGET  test_qg_error_covariance
 #                  SOURCES executables/TestErrorCovariance.cc
 #                  ARGS    "testinput/interfaces.yaml"

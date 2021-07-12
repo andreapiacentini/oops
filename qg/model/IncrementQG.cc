@@ -41,7 +41,7 @@ namespace qg {
 // -----------------------------------------------------------------------------
 IncrementQG::IncrementQG(const GeometryQG & resol, const oops::Variables & vars,
                          const util::DateTime & vt)
-  : fields_(new FieldsQG(resol, vars, lbc_, vt))
+  : fields_(new FieldsQG(resol, vars, vt))
 {
   fields_->zero();
   oops::Log::trace() << "IncrementQG constructed." << std::endl;
