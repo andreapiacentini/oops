@@ -121,7 +121,6 @@ class IncrementQG : public util::Printable,
 /// Data
  private:
   void print(std::ostream &) const override;
-  const bool lbc_ = false;
   std::unique_ptr<FieldsQG> fields_;
 };
 // -----------------------------------------------------------------------------
