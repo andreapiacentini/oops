@@ -1,6 +1,6 @@
 
 add_subdirectory( model )
-#add_subdirectory( mains )
+add_subdirectory( mains )
 add_subdirectory( test )
 
 ecbuild_add_test( TARGET qg_coding_norms

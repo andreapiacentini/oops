@@ -30,6 +30,7 @@
 #include "model/QgFortran.h"
 
 #include "oops/base/Variables.h"
+#include "oops/mpi/mpi.h"
 #include "oops/util/DateTime.h"
 #include "oops/util/Logger.h"
 
@@ -64,8 +65,12 @@ FieldsQG::FieldsQG(const FieldsQG & other)
 FieldsQG::FieldsQG(const FieldsQG & other, const GeometryQG & geom)
   : geom_(new GeometryQG(geom)), vars_(other.vars_), time_(other.time_)
 {
-  oops::Log::warning() << " Change of resolution not yet implemented. Copy instead. "
-   << std::endl;
+  int world_rank = oops::mpi::world().rank();
+  if (world_rank == 0) {
+    oops::Log::debug() << " Change of resolution not yet implemented. Copy instead. "
+		       << std::endl;
+  }
+  // TODO: Implement the change of resolution.
   // qg_fields_create_f90(keyFlds_, geom_->toFortran(), vars_);
   // qg_fields_change_resol_f90(keyFlds_, other.keyFlds_);
   qg_fields_create_from_other_f90(keyFlds_, other.keyFlds_);
@@ -145,31 +150,32 @@ void FieldsQG::changeResolution(const FieldsQG & other) {
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::add(const FieldsQG & rhs) {
-  FieldsQG rhs_myres(rhs, *geom_);
-  qg_fields_add_incr_f90(keyFlds_, rhs_myres.keyFlds_);
+  // TODO: Implement change of resolution
+  // FieldsQG rhs_myres(rhs, *geom_);
+  // qg_fields_add_incr_f90(keyFlds_, rhs_myres.keyFlds_);
+  qg_fields_add_incr_f90(keyFlds_, rhs.keyFlds_);
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::diff(const FieldsQG & x1, const FieldsQG & x2) {
-  FieldsQG x1_myres(x1, *geom_);
-  FieldsQG x2_myres(x2, *geom_);
-  qg_fields_diff_incr_f90(keyFlds_, x1_myres.keyFlds_, x2_myres.keyFlds_);
+  // TODO: Implement change of resolution
+  // FieldsQG x1_myres(x1, *geom_);
+  // FieldsQG x2_myres(x2, *geom_);
+  // qg_fields_diff_incr_f90(keyFlds_, x1_myres.keyFlds_, x2_myres.keyFlds_);
+  qg_fields_diff_incr_f90(keyFlds_, x1.keyFlds_, x2.keyFlds_);
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::setAtlas(atlas::FieldSet * afieldset) const {
-  oops::Log::warning() << " Atlas conversion not yet implemented. To be discussed with Benjamin. "
-   << std::endl;
+  ABORT(" Atlas conversion not yet implemented. To be discussed with Benjamin. ");
   // qg_fields_set_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::toAtlas(atlas::FieldSet * afieldset) const {
-  oops::Log::warning() << " Atlas conversion not yet implemented. To be discussed with Benjamin. "
-   << std::endl;
+  ABORT(" Atlas conversion not yet implemented. To be discussed with Benjamin. ");
   // qg_fields_to_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------
 void FieldsQG::fromAtlas(atlas::FieldSet * afieldset) {
-  oops::Log::warning() << " Atlas conversion not yet implemented. To be discussed with Benjamin. "
-   << std::endl;
+  ABORT(" Atlas conversion not yet implemented. To be discussed with Benjamin. ");
   // qg_fields_from_atlas_f90(keyFlds_, vars_, afieldset->get());
 }
 // -----------------------------------------------------------------------------

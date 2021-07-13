@@ -705,22 +705,22 @@ ecbuild_add_test( TARGET  test_qg_obs_iterator
 ## state-related tests
 ######################################################################
 #
-#ecbuild_add_test( TARGET test_qg_diffstates
-#                  ARGS testinput/diffstates.yaml
-#                  COMMAND  qg_diffstates.x
-#                  TEST_DEPENDS test_qg_eda_3dvar test_qg_eda_4dvar
-#                  DEPENDS qg_eda.x )
-#
-#ecbuild_add_test( TARGET test_qg_addincrement
-#                  ARGS testinput/addincrement.yaml
-#                  COMMAND  qg_addincrement.x
-#                  TEST_DEPENDS test_qg_diffstates )
-#
-#ecbuild_add_test( TARGET test_qg_addincrement_scaled
-#                  ARGS testinput/addincrement_scaled.yaml
-#                  COMMAND  qg_addincrement.x
-#                  TEST_DEPENDS test_qg_diffstates )
-#
+ecbuild_add_test( TARGET test_qg_diffstates
+                  ARGS testinput/diffstates.yaml
+                  COMMAND  qg_diffstates.x
+                  TEST_DEPENDS test_qg_eda_3dvar test_qg_eda_4dvar
+                  DEPENDS qg_eda.x )
+
+ecbuild_add_test( TARGET test_qg_addincrement
+                  ARGS testinput/addincrement.yaml
+                  COMMAND  qg_addincrement.x
+                  TEST_DEPENDS test_qg_diffstates )
+
+ecbuild_add_test( TARGET test_qg_addincrement_scaled
+                  ARGS testinput/addincrement_scaled.yaml
+                  COMMAND  qg_addincrement.x
+                  TEST_DEPENDS test_qg_diffstates )
+
 #ecbuild_add_test( TARGET test_qg_convertincrement
 #                  OMP    2
 #                  ARGS testinput/convertincrement.yaml

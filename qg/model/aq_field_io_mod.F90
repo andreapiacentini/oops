@@ -2,9 +2,11 @@ module aq_field_io_mod
    use aq_constants_mod
    use qg_geom_mod
    use datetime_mod
+   use duration_mod
    use atlas_module
    use fckit_module
    use netcdf
+   use, intrinsic :: iso_c_binding
    
    implicit none
 
@@ -72,6 +74,8 @@ contains
       real(aq_real), allocatable :: ncbuff3dd(:,:,:) 
       integer(atlas_kind_idx) :: ib_i, ib_j, ib_k, ib_var, il_lev
       logical :: ll_sgl
+      character(len=:), allocatable :: cl_pos
+      integer :: poslen
       logical :: ll_up
 
       if (geom%fmpi%size() == 1) then
@@ -102,7 +106,13 @@ contains
       call aq_nferr(nf90_get_var(ncid, varid, mod_levs))
       mod_levels = maxval(mod_levs)
       deallocate(mod_levs)
-      ll_up = (geom%orientation == "up")
+      if (nf90_inquire_attribute(ncid, varid, "positive", len=poslen) == nf90_noerr) then
+         allocate(character(len=poslen)::cl_pos)
+         call aq_nferr(nf90_get_att(ncid, varid, "positive", cl_pos))
+      else
+         cl_pos = "down"
+      end if
+      ll_up = trim(geom%orientation) /= trim(cl_pos)
       do ib_var = 1, size(vars)
          afld = afset%field(trim(vars(ib_var)))
          if (ll_sgl) then
@@ -166,13 +176,17 @@ contains
       type(datetime),         intent(in) :: date
 
       integer :: ncid, il_create_mode
-      integer :: il_dlat, il_dlon, il_dlev, il_vlat, il_vlon, il_vlev
+      integer :: il_dlat, il_dlon, il_dlev, il_dtime
+      integer :: il_vlat, il_vlon, il_vlev, il_vtime
       integer, allocatable :: ila_varid(:)
       integer :: ib, ib_var, ib_i, ib_j, ib_k
       type(atlas_Field) :: aloc_3d, aglo_3d
       real(aq_single), pointer :: loc_3ds(:,:), glo_3ds(:,:,:), glo_3dn(:,:,:)
       real(aq_real), pointer :: loc_3dd(:,:), glo_3dd(:,:,:)
       character(len=20) :: cl_date
+      type(datetime) :: ref_date
+      type(duration) :: dt
+      integer(c_int64_t) :: timesec
       logical :: ll_sgl
       
       aloc_3d = afset%field(trim(vars(1)))
@@ -181,7 +195,6 @@ contains
       
       if( geom%fmpi%rank() == 0 ) then
          il_create_mode =      NF90_NETCDF4
-         il_create_mode = ior( NF90_CLASSIC_MODEL , il_create_mode)
          il_create_mode = ior( NF90_CLOBBER       , il_create_mode)
          call aq_nferr(nf90_create(trim(file), il_create_mode, ncid))
          call aq_nferr(nf90_put_att(ncid, NF90_GLOBAL, 'Conventions', 'CF-1.0'))
@@ -191,6 +204,9 @@ contains
 !AP         call aq_nferr(nf90_put_att(ncid, NF90_GLOBAL, 'field',trim(afset%name())))
          call aq_nferr(nf90_put_att(ncid, NF90_GLOBAL, 'field',trim(name)))
 !AP END
+         call datetime_create("1970-01-01T00:00:00Z",ref_date)
+         call datetime_diff(date, ref_date, dt)
+         timesec = duration_seconds(dt)
          call datetime_to_string(date, cl_date)
          if (cl_date /= "1970-01-01T00:00:00Z") &
             & call aq_nferr(nf90_put_att(ncid, NF90_GLOBAL, 'date',cl_date))
@@ -200,6 +216,7 @@ contains
          call aq_nferr(nf90_def_dim(ncid,'lat',geom%grid%ny(), il_dlat))
          call aq_nferr(nf90_def_dim(ncid,'lon',geom%grid%nx(1), il_dlon))
          call aq_nferr(nf90_def_dim(ncid,'lev',geom%levels, il_dlev))
+         call aq_nferr(nf90_def_dim(ncid,'time', NF90_UNLIMITED, il_dtime))
          !
          call aq_nferr(nf90_def_var(ncid,'lat',NF90_FLOAT,[il_dlat],il_vlat))
          call aq_nferr(nf90_put_att(ncid,il_vlat,'standard_name','latitude'))
@@ -218,12 +235,19 @@ contains
             call aq_nferr(nf90_put_att(ncid,il_vlev,'formula_terms',&
                & 'ap: a_hybr_coord b: b_hybr_coord ps: air_pressure_at_surface'))
          end if
+         call aq_nferr(nf90_def_var(ncid,'time',NF90_INT64,[il_dtime],il_vtime))
+         call aq_nferr(nf90_put_att(ncid,il_vtime,'axis','t'))
+         call aq_nferr(nf90_put_att(ncid,il_vtime,'standard_name','Time axis'))
+         call aq_nferr(nf90_put_att(ncid,il_vtime,'units',&
+            &'seconds since 1970-01-01 00:00:00'))
+         call aq_nferr(nf90_put_att(ncid,il_vtime,'time_origin','1970-01-01 00:00:00'))
+         call aq_nferr(nf90_put_att(ncid,il_vtime,'calendar','standard'))
 
          allocate(ila_varid(size(vars)))
          
          do ib_var = 1, size(vars)
             call aq_nferr(nf90_def_var(ncid,trim(vars(ib_var)),NF90_FLOAT,&
-                  &                   [il_dlon,il_dlat,il_dlev],ila_varid(ib_var)))
+                  &                   [il_dlon,il_dlat,il_dlev,il_dtime],ila_varid(ib_var)))
             call aq_nferr(nf90_put_att(ncid,ila_varid(ib_var),'units','ppb'))
          end do
          
@@ -243,6 +267,8 @@ contains
                & real([(mod_levels-geom%levels+ib,ib=1,geom%levels)],kind=aq_single)))
          end if
          
+         call aq_nferr(nf90_put_var(ncid,il_vtime,timesec,start=[1]))
+
       end if
 
       if( geom%fmpi%rank() == 0 ) &

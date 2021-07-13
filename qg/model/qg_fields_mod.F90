@@ -229,7 +229,7 @@ subroutine aq_field_create_from_other(self, other, name, date, kind)
   self%var_name(:) = other%var_name(:)
   !
   self%geom => other%geom
-  self%mod_levels = self%geom%levels
+  self%mod_levels = other%mod_levels
   self%fmpi = self%geom%fmpi
   self%locsize = self%geom%fs_3d%size()*self%geom%levels
   !
@@ -440,6 +440,8 @@ subroutine aq_field_copy(self, other)
   !
   integer(atlas_kind_idx) :: ib_var
   !
+  self%mod_levels = other%mod_levels
+  !
   select case(self%prec)
   case(aq_single)
      select case(other%prec)
@@ -551,13 +553,16 @@ subroutine aq_field_add_incr(self, incr)
   class(qg_fields), intent(inout) :: self
   class(qg_fields), intent(in)    :: incr
   !
-  integer(atlas_kind_idx) :: ib_var
+  integer(atlas_kind_idx) :: ib_var, ib_pos
   !
   if (self%prec == aq_single .or. incr%prec == aq_single) &
      & call abor1_ftn('aq_field_add_incr not implemented for single precision')
-!$omp parallel do
-  do ib_var = 1, self%n_vars
-     call aq_axpy(self%locsize, 1.0_oops_real, incr%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+!$omp parallel do private(ib_pos)
+  do ib_var = 1, incr%n_vars
+     ib_pos = findloc(self%var_name, incr%var_name(ib_var), dim=1)
+     if (ib_pos < 1) &
+        & call abor1_ftn('aq_field_add_incr: incr variable '//trim(incr%var_name(ib_var))//' not in state variables')
+     call aq_axpy(self%locsize, 1.0_oops_real, incr%fldsd(ib_var)%fld, self%fldsd(ib_pos)%fld)
   end do
 !$omp end parallel do
   !
@@ -568,14 +573,19 @@ subroutine aq_field_diff_incr(self, fld1, fld2)
   class(qg_fields), intent(in)    :: fld1
   class(qg_fields), intent(in)    :: fld2
   !
-  integer(atlas_kind_idx) :: ib_var
+  integer(atlas_kind_idx) :: ib_var, ib_pos
   !
   if (self%prec == aq_single .or. fld1%prec == aq_single .or. fld2%prec == aq_single) &
      & call abor1_ftn('aq_field_diff_incr not implemented for single precision')
-!$omp parallel do
+  !
+  self%mod_levels = fld1%mod_levels
+!$omp parallel do private(ib_pos)
   do ib_var = 1, self%n_vars
-     call aq_copy(self%locsize, fld1%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
-     call aq_axpy(self%locsize, -1.0_oops_real, fld2%fldsd(ib_var)%fld, self%fldsd(ib_var)%fld)
+     ib_pos = findloc(fld1%var_name, self%var_name(ib_var), dim=1)
+     if (ib_pos < 1) &
+        & call abor1_ftn('aq_field_diff_incr: incr variable '//trim(self%var_name(ib_var))//' not in state variables')
+     call aq_copy(self%locsize, fld1%fldsd(ib_pos)%fld, self%fldsd(ib_var)%fld)
+     call aq_axpy(self%locsize, -1.0_oops_real, fld2%fldsd(ib_pos)%fld, self%fldsd(ib_var)%fld)
   end do
 !$omp end parallel do
   !

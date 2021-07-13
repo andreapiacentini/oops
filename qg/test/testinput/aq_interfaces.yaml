@@ -55,8 +55,6 @@ state test:
     state variables: *vars
   statefileout:
     datadir: Data
-    exp: out
-    type: fc
     date: '2010-07-05T07:00:00Z'
     filename: Data/HMGEMS02+2010070507_out.nc
     state variables: *vars
