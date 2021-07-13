@@ -436,18 +436,18 @@ ecbuild_add_test( TARGET  test_qg_obs_iterator
 #                  DEPENDS qg_ens_hofx.x
 #                  TEST_DEPENDS test_qg_gen_ens_pert_B test_qg_make_obs_4d_12h )
 #
-#ecbuild_add_test( TARGET test_qg_ens_variance
-#                  OMP 2
-#                  ARGS testinput/ens_variance.yaml
-#                  COMMAND  qg_ens_variance.x
-#                  TEST_DEPENDS test_qg_gen_ens_pert_B )
-#
-#ecbuild_add_test( TARGET test_qg_ens_recenter
-#                  OMP 2
-#                  ARGS testinput/ens_recenter.yaml
-#                  COMMAND  qg_ens_recenter.x
-#                  TEST_DEPENDS test_qg_gen_ens_pert_B )
-#
+ecbuild_add_test( TARGET test_qg_ens_variance
+                  OMP 2
+                  ARGS testinput/ens_variance.yaml
+                  COMMAND  qg_ens_variance.x
+                  TEST_DEPENDS test_qg_gen_ens_pert_B )
+
+ecbuild_add_test( TARGET test_qg_ens_recenter
+                  OMP 2
+                  ARGS testinput/ens_recenter.yaml
+                  COMMAND  qg_ens_recenter.x
+                  TEST_DEPENDS test_qg_gen_ens_pert_B )
+
 #ecbuild_add_test( TARGET test_qg_hybridgain_analysis
 #                  OMP 2
 #                  ARGS testinput/hybridgain_analysis.yaml
@@ -471,12 +471,12 @@ ecbuild_add_test( TARGET  test_qg_obs_iterator
 #                  COMMAND  qg_ens_variance.x
 #                  TEST_DEPENDS test_qg_gen_ens_pert_B test_qg_uniform_field_inflation )
 #
-#ecbuild_add_test( TARGET test_qg_ens_variance_inflation_value
-#                  OMP 2
-#                  ARGS testinput/ens_variance_inflation_value.yaml
-#                  COMMAND  qg_ens_variance.x
-#                  TEST_DEPENDS test_qg_gen_ens_pert_B )
-#
+ecbuild_add_test( TARGET test_qg_ens_variance_inflation_value
+                  OMP 2
+                  ARGS testinput/ens_variance_inflation_value.yaml
+                  COMMAND  qg_ens_variance.x
+                  TEST_DEPENDS test_qg_gen_ens_pert_B )
+
 #ecbuild_add_test( TARGET test_qg_rtpp
 #                  ARGS testinput/rtpp.yaml
 #                  COMMAND  qg_rtpp.x
@@ -708,8 +708,9 @@ ecbuild_add_test( TARGET  test_qg_obs_iterator
 ecbuild_add_test( TARGET test_qg_diffstates
                   ARGS testinput/diffstates.yaml
                   COMMAND  qg_diffstates.x
-                  TEST_DEPENDS test_qg_eda_3dvar test_qg_eda_4dvar
-                  DEPENDS qg_eda.x )
+		  )
+#                  TEST_DEPENDS test_qg_eda_3dvar test_qg_eda_4dvar
+#                  DEPENDS qg_eda.x )
 
 ecbuild_add_test( TARGET test_qg_addincrement
                   ARGS testinput/addincrement.yaml

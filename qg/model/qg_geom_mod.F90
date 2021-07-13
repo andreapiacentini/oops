@@ -129,7 +129,7 @@ contains
       class(qg_geom), intent(inout) :: self
       class(qg_geom), intent(in)    :: other
       !
-      self%grid = other%grid
+      self%grid = atlas_StructuredGrid(other%grid%c_ptr())
       self%nx = other%nx
       self%ny = other%ny
       self%nz = other%nz
@@ -149,8 +149,8 @@ contains
       self%bbox_jmin = other%bbox_jmin 
       self%bbox_jmax = other%bbox_jmax 
       self%bbox_jsz  = other%bbox_jsz
-      self%fs_2d = other%fs_2d
-      self%fs_3d = other%fs_3d
+      self%fs_2d = atlas_functionspace_StructuredColumns(other%fs_2d%c_ptr())
+      self%fs_3d = atlas_functionspace_StructuredColumns(other%fs_3d%c_ptr())
       if ( self%halo>0 ) then
          allocate( self%halo_mask(size(other%halo_mask)) )
          self%halo_mask(:) = other%halo_mask(:)

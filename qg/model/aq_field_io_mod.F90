@@ -30,7 +30,7 @@ contains
    subroutine aq_write_field_gmsh(afset, geom, file)
       
       class(atlas_FieldSet),  intent(in) :: afset
-      type(qg_geom), pointer, intent(in) :: geom
+      type(qg_geom),          intent(in) :: geom
       character(len=*),       intent(in) :: file
       
       type(atlas_Output) :: gmsh
@@ -60,7 +60,7 @@ contains
       
       class(atlas_FieldSet),  intent(inout) :: afset
       character(len=*),       intent(in)    :: vars(:)
-      type(qg_geom), pointer, intent(in)    :: geom
+      type(qg_geom),          intent(in)    :: geom
       integer,                intent(inout) :: mod_levels
       character(len=*),       intent(in)    :: file
       type(datetime),         intent(in)    :: date
@@ -170,7 +170,7 @@ contains
       character(len=*),       intent(in) :: name
 !AP END
       character(len=*),       intent(in) :: vars(:)
-      type(qg_geom), pointer, intent(in) :: geom
+      type(qg_geom),          intent(in) :: geom
       integer,                intent(in) :: mod_levels
       character(len=*),       intent(in) :: file
       type(datetime),         intent(in) :: date
@@ -216,7 +216,9 @@ contains
          call aq_nferr(nf90_def_dim(ncid,'lat',geom%grid%ny(), il_dlat))
          call aq_nferr(nf90_def_dim(ncid,'lon',geom%grid%nx(1), il_dlon))
          call aq_nferr(nf90_def_dim(ncid,'lev',geom%levels, il_dlev))
+#ifdef NDEBUG
          call aq_nferr(nf90_def_dim(ncid,'time', NF90_UNLIMITED, il_dtime))
+#endif
          !
          call aq_nferr(nf90_def_var(ncid,'lat',NF90_FLOAT,[il_dlat],il_vlat))
          call aq_nferr(nf90_put_att(ncid,il_vlat,'standard_name','latitude'))
@@ -235,6 +237,7 @@ contains
             call aq_nferr(nf90_put_att(ncid,il_vlev,'formula_terms',&
                & 'ap: a_hybr_coord b: b_hybr_coord ps: air_pressure_at_surface'))
          end if
+#ifdef NDEBUG
          call aq_nferr(nf90_def_var(ncid,'time',NF90_INT64,[il_dtime],il_vtime))
          call aq_nferr(nf90_put_att(ncid,il_vtime,'axis','t'))
          call aq_nferr(nf90_put_att(ncid,il_vtime,'standard_name','Time axis'))
@@ -242,12 +245,17 @@ contains
             &'seconds since 1970-01-01 00:00:00'))
          call aq_nferr(nf90_put_att(ncid,il_vtime,'time_origin','1970-01-01 00:00:00'))
          call aq_nferr(nf90_put_att(ncid,il_vtime,'calendar','standard'))
-
+#endif
          allocate(ila_varid(size(vars)))
          
          do ib_var = 1, size(vars)
+#ifdef NDEBUG
             call aq_nferr(nf90_def_var(ncid,trim(vars(ib_var)),NF90_FLOAT,&
-                  &                   [il_dlon,il_dlat,il_dlev,il_dtime],ila_varid(ib_var)))
+               &                   [il_dlon,il_dlat,il_dlev,il_dtime],ila_varid(ib_var)))
+#else
+            call aq_nferr(nf90_def_var(ncid,trim(vars(ib_var)),NF90_FLOAT,&
+               &                   [il_dlon,il_dlat,il_dlev],ila_varid(ib_var)))
+#endif
             call aq_nferr(nf90_put_att(ncid,ila_varid(ib_var),'units','ppb'))
          end do
          
@@ -266,9 +274,9 @@ contains
             call aq_nferr(nf90_put_var(ncid,il_vlev, &
                & real([(mod_levels-geom%levels+ib,ib=1,geom%levels)],kind=aq_single)))
          end if
-         
+#ifdef NDEBUG         
          call aq_nferr(nf90_put_var(ncid,il_vtime,timesec,start=[1]))
-
+#endif
       end if
 
       if( geom%fmpi%rank() == 0 ) &

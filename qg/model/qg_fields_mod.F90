@@ -54,7 +54,7 @@ type, extends(atlas_FieldSet) :: qg_fields
   character(len=:), allocatable :: fs_name
   type(datetime)                :: date
   character(len=:), allocatable :: var_name(:)
-  type(qg_geom), pointer        :: geom
+  type(qg_geom)                 :: geom
   integer                       :: mod_levels
   type(fckit_mpi_comm)          :: fmpi
   integer                       :: prec
@@ -129,7 +129,7 @@ contains
 subroutine aq_field_create(self, geom, vars, name, date, kind)
   !
   class(qg_fields),           intent(inout) :: self
-  type(qg_geom), target,      intent(in)    :: geom
+  type(qg_geom),              intent(in)    :: geom
   type(oops_variables),       intent(in)    :: vars
   character(len=*), optional, intent(in)    :: name
   type(datetime), optional,   intent(in)    :: date
@@ -168,7 +168,7 @@ subroutine aq_field_create(self, geom, vars, name, date, kind)
   self%n_vars = vars%nvars()
   self%var_name = vars%varlist()
   !
-  self%geom => geom
+  call self%geom%clone(geom)
   self%mod_levels = self%geom%levels
   self%fmpi = geom%fmpi
   self%locsize = self%geom%fs_3d%size()*self%geom%levels
@@ -228,7 +228,7 @@ subroutine aq_field_create_from_other(self, other, name, date, kind)
   allocate(character(aq_varlen)::self%var_name(self%n_vars))
   self%var_name(:) = other%var_name(:)
   !
-  self%geom => other%geom
+  call self%geom%clone(other%geom)
   self%mod_levels = other%mod_levels
   self%fmpi = self%geom%fmpi
   self%locsize = self%geom%fs_3d%size()*self%geom%levels
