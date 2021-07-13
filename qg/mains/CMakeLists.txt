@@ -33,11 +33,11 @@
 #                        LIBS    qg
 #                      )
 #
-#ecbuild_add_executable( TARGET  qg_hofx3d.x
-#                        SOURCES qgHofX3D.cc
-#                        LIBS    qg
-#                      )
-#
+ecbuild_add_executable( TARGET  qg_hofx3d.x
+                        SOURCES qgHofX3D.cc
+                        LIBS    qg
+                      )
+
 ecbuild_add_executable( TARGET  qg_diffstates.x
                         SOURCES qgDiffStates.cc
                         LIBS    qg
