@@ -53,7 +53,9 @@ type group_data
 end type group_data
 
 type qg_obsdb
-  integer :: ngrp                               !< Number of groups
+  integer :: ngrp = 1                           !< Number of groups (1 obs space == 1 instrument == 1 chemical spc in aq)
+  character(len=:),allocatable :: instrname     !< Instrument name 
+  character(len=:),allocatable :: spcname       !< Name of the chemical species
   character(len=1024) :: filein                 !< Input filename
   character(len=1024) :: fileout                !< Output filename
   type(group_data),pointer :: grphead => null() !< Head group
@@ -88,7 +90,7 @@ type(datetime),intent(in) :: winend            !< End of window
 
 ! Local variables
 character(len=1024) :: fin,fout
-character(len=:),allocatable :: str, instrname, spcname
+character(len=:),allocatable :: str
 
 ! Reference time for hdf5 I/O files
 call datetime_create("1970-01-01T00:00:00Z",obs_ref_time)
@@ -112,15 +114,13 @@ if (f_conf%has("obsdataout")) then
 else
   fout = ''
 endif
-! write(*,*) "in qg_obsdb_setup: I setup a new obsdb instance"
 ! Set attributes
-self%ngrp = 1 ! each obs space corresponds to only 1 instrument in aq
 self%filein = fin
 self%fileout = fout
-call f_conf%get_or_die("instr name",instrname)
-call f_conf%get_or_die("obs type",spcname)
+call f_conf%get_or_die("instr name",self%instrname)
+call f_conf%get_or_die("obs type",self%spcname)
 ! Read observation data
-if (self%filein/='') call qg_obsdb_read(self,instrname,spcname,winbgn,winend)
+if (self%filein/='') call qg_obsdb_read(self,winbgn,winend)
 
 end subroutine qg_obsdb_setup
 ! ------------------------------------------------------------------------------
@@ -398,7 +398,7 @@ end subroutine qg_obsdb_nobs
 !  Private
 ! ------------------------------------------------------------------------------
 !> Read observation data
-subroutine qg_obsdb_read(self,instrname,spcname,winbgn,winend)
+subroutine qg_obsdb_read(self,winbgn,winend)
 
 USE H5_UTILS_MOD, ONLY : ip_hid_t, h5state_t, OPEN_H5GROUP, CLOSE_H5GROUP, CLOSE_H5SPACE, CHECK_H5FILE, Get_h5dset_size
 USE H5_READ_MOD, ONLY : OPEN_H5FILE_RDONLY, CLOSE_H5FILE, READSLICE_H5DSET
@@ -408,8 +408,6 @@ implicit none
 
 ! Passed variables
 type(qg_obsdb),intent(inout) :: self !< Observation data
-character(len=*),intent(in) :: instrname             !< Group
-character(len=*),intent(in) :: spcname             !< Group
 type(datetime),intent(in) :: winbgn  !< Start of window
 type(datetime),intent(in) :: winend  !< End of window
 
@@ -445,9 +443,9 @@ type(qg_obsvec) :: obsloc,obsval,obserr
 CALL H5open_f (il_err)
 ! Open input hdf5 file
 CALL OPEN_H5FILE_RDONLY(self%filein, il_hdat_id)
-CALL CHECK_H5FILE(il_hdat_id, trim(instrname), "Surface")
+CALL CHECK_H5FILE(il_hdat_id, trim(self%instrname), "Surface")
 
-CALL OPEN_H5GROUP(il_hdat_id, '/'//trim(instrname), h5state%instr_id)
+CALL OPEN_H5GROUP(il_hdat_id, '/'//trim(self%instrname), h5state%instr_id)
 
 ! Get the window begin and window end time in seconds using the obs_ref_time
 call datetime_to_string(winbgn,timestr1)
@@ -467,7 +465,7 @@ allocate(ila_times(nobs),rla_lats(nobs),rla_lons(nobs),rla_obs(nobs))
 CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Timestamp', ila_times)
 CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Latitude', rla_lats)
 CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Longitude', rla_lons)
-CALL READSLICE_H5DSET(h5state, 'OBSERVATIONS/'//trim(spcname)//'/Y', rla_obs)
+CALL READSLICE_H5DSET(h5state, 'OBSERVATIONS/'//trim(self%spcname)//'/Y', rla_obs)
 
 ! Setup observation vector for the locations
 call qg_obsvec_setup(obsloc,3,nobs)
@@ -492,20 +490,31 @@ write(*,*) obsloc%values(2,:)
 write(*,*) obsloc%values(3,:)
 write(*,*) obsval%values(1,:)
 ! Store observations data in the obsdb structure
-call qg_obsdb_create(self,trim(spcname),times,obsloc)
-call qg_obsdb_put(self,trim(spcname),'ObsValue',obsval)
-call qg_obsdb_put(self,trim(spcname),'ObsError',obserr) ! This should not be mandatory but it is asked by HofX!!!!
+call qg_obsdb_create(self,trim(self%spcname),times,obsloc)
+call qg_obsdb_put(self,trim(self%spcname),'ObsValue',obsval)
+call qg_obsdb_put(self,trim(self%spcname),'ObsError',obserr) ! This should not be mandatory but it is asked by HofX!!!!
 
 deallocate(ila_times,rla_lats,rla_lons,rla_obs,times)
+
+CALL CLOSE_H5SPACE(h5state%memspace_id)
+
+CALL CLOSE_H5SPACE(h5state%dataspace_id)
 
 CALL CLOSE_H5GROUP(h5state%instr_id)
 
 CALL CLOSE_H5FILE(il_hdat_id, .FALSE.)
 
+CALL H5close_f(il_err)
+
 end subroutine qg_obsdb_read
 ! ------------------------------------------------------------------------------
 !> Write observation data
 subroutine qg_obsdb_write(self)
+
+use H5_UTILS_MOD, only : h5state_t, CREATE_H5FILE, CREATE_H5GROUP, CREATE_ATTRIB_STRING, &
+         & CREATE_H5GROUP_INSTR, CREATE_H5GROUP_INSTRDOM, CLOSE_H5GROUP, CLOSE_H5FILE
+use H5_UTILS_MOD, only : ip_hdf_namelen, ig_hdfverb, ip_hid_t
+use H5_WRITE_MOD, only : writeslice_h5dset_scalar
 
 implicit none
 
@@ -519,92 +528,70 @@ type(group_data),pointer :: jgrp
 type(column_data),pointer :: jcol
 character(len=6) :: igrpchar
 character(len=50) :: stime
+type(h5state_t) :: h5state
+integer(kind=ip_hid_t) :: il_hstat_id, il_instr_id
+character(len=15) :: cl_geogrp = 'GEOLOCALIZATION'
+character(len=12) :: cl_obsgrp = 'OBSERVATIONS'
+character(len=19), dimension(:), allocatable :: cla_timehuman
+integer :: il
+integer :: il_err
+integer, dimension(:), allocatable :: timestamp                 
+type(duration) :: dtdiff                   
 
-! a_end_time = m_start_time + FLOAT(ig_nbwin*ig_win_length)
-! WRITE(cl_hstatname, &
-!    &    fmt="('HSTAT+',I4.4,I2.2,I2.2,I2.2,'+', &
-!    &    I4.4,I2.2,I2.2,I2.2,'.h5')") &
-!    &    m_start_time%year,m_start_time%month,m_start_time%day,m_start_time%hour, &
-!    &    a_end_time%year,a_end_time%month,a_end_time%day,a_end_time%hour
+CALL H5open_f(il_err)
 
-! ! Create HSTAT.h5 output file
-! CALL CREATE_H5FILE(cl_hstatname, ig_hstat_id)
+! Create HSTAT.h5 output file
+call create_h5file(self%fileout, il_hstat_id)
 
-! Create NetCDF file
-! call ncerr(nf90_create(trim(self%fileout),or(nf90_clobber,nf90_64bit_offset),ncid))
+call create_h5group_instr(il_hstat_id, trim(self%instrname), "Surface")
 
-! ! Define dimensions
-! call ncerr(nf90_def_dim(ncid,'nstrmax',50,nstrmax_id))
-! call ncerr(nf90_def_dim(ncid,'ngrp',self%ngrp,ngrp_id))
+call create_h5group_instrdom(il_hstat_id, trim(self%instrname)//'/'//'GEMS02', il_instr_id)
 
-! ! Define variable
-! call ncerr(nf90_def_var(ncid,'grpname',nf90_char,(/nstrmax_id,ngrp_id/),grpname_id))
+call create_h5group(il_instr_id,trim(cl_obsgrp)//'/'//trim(self%spcname))
 
-! ! End definitions
-! call ncerr(nf90_enddef(ncid))
+h5state%instr_id = il_instr_id
 
-! ! Loop over groups
-! igrp = 0
-! jgrp => self%grphead
-! do while (associated(jgrp))
-!   igrp = igrp+1
-!   if (jgrp%nobs > 0) then
-!     write(igrpchar,'(i6.6)') igrp
-!     ! Enter definitions mode
-!     call ncerr(nf90_redef(ncid))
+jgrp => self%grphead
+if (jgrp%nobs > 0) then
+  allocate(cla_timehuman(jgrp%nobs),timestamp(jgrp%nobs))
+  do iobs=1,jgrp%nobs
+    call datetime_to_string(jgrp%times(iobs),stime)
+    cla_timehuman(iobs) = stime(:19)
+    call datetime_diff(jgrp%times(iobs), obs_ref_time, dtdiff)
+    timestamp(iobs) = int(duration_seconds(dtdiff),kind=4)
+  end do
+  call writeslice_h5dset_scalar(h5state, trim(cl_geogrp)//'/TimeHuman', cla_timehuman)
+  call writeslice_h5dset_scalar(h5state, trim(cl_geogrp)//'/Timestamp', timestamp)
+  deallocate(cla_timehuman,timestamp)
 
-!     ! Compute dimensions
-!     ncol = 0
-!     nlevmax = 0
-!     jcol => jgrp%colhead
-!     do while (associated(jcol))
-!       ncol = ncol+1
-!       nlevmax = max(jcol%nlev,nlevmax)
-!       jcol => jcol%next
-!     enddo
+  ! call writeslice_h5dset_scalar(il_instr_id, trim(cl_geogrp)//'/Timestamp', IDINT(self%time))
 
-!     ! Define dimensions
-!     call ncerr(nf90_def_dim(ncid,'nobs_'//igrpchar,jgrp%nobs,nobs_id))
-!     call ncerr(nf90_def_dim(ncid,'ncol_'//igrpchar,ncol,ncol_id))
-!     call ncerr(nf90_def_dim(ncid,'nlevmax_'//igrpchar,nlevmax,nlevmax_id))
+  ! Loop over columns
+  icol = 0
+  jcol => jgrp%colhead
+  do while (associated(jcol))
+    icol = icol+1
+    select case(trim(jcol%colname))
+    case ('Location')
+      call writeslice_h5dset_scalar(h5state, trim(cl_geogrp)//'/Longitude', jcol%values(1,:))
+      call writeslice_h5dset_scalar(h5state, trim(cl_geogrp)//'/Latitude', jcol%values(2,:))
+    case ('ObsValue')
+      call writeslice_h5dset_scalar(h5state, trim(cl_obsgrp)//'/'//trim(self%spcname)//'/Y', jcol%values(1,:))
+    case ('ObsError')
+      call writeslice_h5dset_scalar(h5state, trim(cl_obsgrp)//'/'//trim(self%spcname)//'/ErrorCovariance', jcol%values(1,:))
+    case default    
+      write(*,*) 'Warning:',jcol%colname,' not known'
+    end select
+    ! Update
+    jcol => jcol%next
+  enddo
+endif
 
-!     ! Define variable
-!     call ncerr(nf90_def_var(ncid,'times_'//igrpchar,nf90_char,(/nstrmax_id,nobs_id/),times_id))
-!     call ncerr(nf90_def_var(ncid,'nlev_'//igrpchar,nf90_int,(/ncol_id/),nlev_id))
-!     call ncerr(nf90_def_var(ncid,'colname_'//igrpchar,nf90_char,(/nstrmax_id,ncol_id/),colname_id))
-!     call ncerr(nf90_def_var(ncid,'values_'//igrpchar,nf90_double,(/nlevmax_id,ncol_id,nobs_id/),values_id))
+call close_h5group(il_instr_id)
 
-!     ! End definitions
-!     call ncerr(nf90_enddef(ncid))
+CALL close_h5file(il_hstat_id, .true.)
 
-!     ! Put variables
-!     call ncerr(nf90_put_var(ncid,grpname_id,jgrp%grpname,(/1,igrp/),(/50,1/)))
-!     do iobs=1,jgrp%nobs
-!       call datetime_to_string(jgrp%times(iobs),stime)
-!       call ncerr(nf90_put_var(ncid,times_id,stime,(/1,iobs/),(/50,1/)))
-!     end do
-
-!     ! Loop over columns
-!     icol = 0
-!     jcol => jgrp%colhead
-!     do while (associated(jcol))
-!       icol = icol+1
-
-!       ! Put variables
-!       call ncerr(nf90_put_var(ncid,nlev_id,jcol%nlev,(/icol/)))
-!       call ncerr(nf90_put_var(ncid,colname_id,jcol%colname,(/1,icol/),(/50,1/)))
-!       call ncerr(nf90_put_var(ncid,values_id,jcol%values(1:jcol%nlev,:),(/1,icol,1/),(/jcol%nlev,1,jgrp%nobs/)))
-
-!       ! Update
-!       jcol => jcol%next
-!     enddo
-!   endif
-!   ! Update
-!   jgrp=>jgrp%next
-! end do
-
-! ! Close NetCDF file
-! call ncerr(nf90_close(ncid))
+call H5close_f(il_err)
 
 end subroutine qg_obsdb_write
 ! ------------------------------------------------------------------------------
