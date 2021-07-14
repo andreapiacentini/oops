@@ -12,11 +12,11 @@ use iso_c_binding
 use kinds
 !$ use omp_lib
 use oops_variables_mod
-use qg_change_var_mod
+!AQ use qg_change_var_mod
 use qg_fields_mod
 use qg_geom_mod
 use qg_gom_mod
-use qg_interp_mod
+!AQ use qg_interp_mod
 use qg_locs_mod
 use aq_constants_mod
 
@@ -50,14 +50,13 @@ type(atlas_field) :: lonlat_field, z_field
 real(aq_real), allocatable, dimension(:,:) :: surf_fld
 integer       :: n_vars
 character(len=:), allocatable :: var_name(:)
-type(qg_geom) :: geom
 
 ! Get locations
 lonlat_field = locs%lonlat()
 call lonlat_field%data(lonlat)
 z_field = locs%altitude()
 call z_field%data(z)
-write(*,*) 'In interpolation routine'
+
 ! Check field
 ! call qg_fields_check(fld)
 
@@ -67,36 +66,34 @@ write(*,*) 'In interpolation routine'
 ! Apply change of variables (mistake?)
 ! call qg_change_var(fld,fld_gom)
 
-! call geom%clone(fld%geom)
-! write(*,*) fld%orientation()
-! if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
+if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
 
-! n_vars = gom%vars%nvars()
-! if (n_vars.ne.1) call abor1_ftn('Getvalues interpolates only one field (variable)')
+n_vars = gom%vars%nvars()
+if (n_vars.ne.1) call abor1_ftn('Getvalues interpolates only one field (variable)')
 
-! var_name = gom%vars%varlist()
-! allocate(surf_fld(fld%geom%grid%nx(1),fld%geom%grid%ny()))
-! call fld%gather_var_at_lev(trim(var_name(1)), nlev, surf_fld, 0)
+var_name = gom%vars%varlist()
+allocate(surf_fld(fld%geom%grid%nx(1),fld%geom%grid%ny()))
+call fld%gather_var_at_lev(trim(var_name(1)), nlev, surf_fld, 0)
 
-! if (fld%geom%fmpi%rank() == 0) then
-!   write(*,*) 'Interpolate ',trim(var_name(1)),' at lev ',nlev,' max fld', maxval(surf_fld),' min fld', minval(surf_fld)
-!   write(*,*) 'on latlon'
-!   write(*,*) lonlat(1,:20)
-!   write(*,*) lonlat(2,:20)
-!   write(*,*) z(:20)
-! !$omp parallel do schedule(static) private(jloc)
-!   do jloc=1,locs%nlocs()
-!     ! Check if current obs is in this time frame (t1,t2]
-!     if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
-!       ! Interpolate variables
-!       ! call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!       ! &                                               z(jloc),surf_fld,gom%x(jloc))
-!     endif
-!   enddo
-! !$omp end parallel do
-! endif
-! Release memory
-! deallocate(surf_fld)
+if (fld%geom%fmpi%rank() == 0) then
+  write(*,*) 'Interpolate ',trim(var_name(1)),' at lev ',nlev,' max fld', maxval(surf_fld),' min fld', minval(surf_fld)
+  write(*,*) 'on latlon'
+  write(*,*) lonlat(1,:20)
+  write(*,*) lonlat(2,:20)
+  write(*,*) z(:20)
+!$omp parallel do schedule(static) private(jloc)
+  do jloc=1,locs%nlocs()
+    ! Check if current obs is in this time frame (t1,t2]
+    if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
+      ! Interpolate variables
+      ! call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
+      ! &                                               z(jloc),surf_fld,gom%x(jloc))
+    endif
+  enddo
+!$omp end parallel do
+endif
+!Release memory
+deallocate(surf_fld)
 call lonlat_field%final()
 call z_field%final()
 
