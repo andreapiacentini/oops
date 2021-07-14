@@ -400,9 +400,9 @@ end subroutine qg_obsdb_nobs
 !> Read observation data
 subroutine qg_obsdb_read(self,winbgn,winend)
 
-USE H5_UTILS_MOD, ONLY : ip_hid_t, h5state_t, OPEN_H5GROUP, CLOSE_H5GROUP, CLOSE_H5SPACE, CHECK_H5FILE, Get_h5dset_size
-USE H5_READ_MOD, ONLY : OPEN_H5FILE_RDONLY, CLOSE_H5FILE, READSLICE_H5DSET
-USE H5_SELECTION_MOD, ONLY : Get_number_selected_timeelts
+use H5_UTILS_MOD, only : ip_hid_t, h5state_t, open_h5group, close_h5group, close_h5space, check_h5file, Get_h5dset_size
+use H5_READ_MOD, only : open_h5file_rdonly, close_h5file, readslice_h5dset
+use H5_SELECTION_MOD, only : Get_number_selected_timeelts
 
 implicit none
 
@@ -440,12 +440,12 @@ type(qg_obsvec) :: obsloc,obsval,obserr
 ! Init the hdf5 fortran library 
 ! should go in our HDF5 library in a better place,
 ! cause it was hidden in CREATE_H5FILE, which makes no sense
-CALL H5open_f (il_err)
+call H5open_f (il_err)
 ! Open input hdf5 file
-CALL OPEN_H5FILE_RDONLY(self%filein, il_hdat_id)
-CALL CHECK_H5FILE(il_hdat_id, trim(self%instrname), "Surface")
+call open_h5file_rdonly(self%filein, il_hdat_id)
+call check_h5file(il_hdat_id, trim(self%instrname), "Surface")
 
-CALL OPEN_H5GROUP(il_hdat_id, '/'//trim(self%instrname), h5state%instr_id)
+call open_h5group(il_hdat_id, '/'//trim(self%instrname), h5state%instr_id)
 
 ! Get the window begin and window end time in seconds using the obs_ref_time
 call datetime_to_string(winbgn,timestr1)
@@ -462,10 +462,10 @@ nobs = Get_number_selected_timeelts(h5state,id_tmin,id_tmax)
 ! Read the data from the hdf5
 allocate(ila_times(nobs),rla_lats(nobs),rla_lons(nobs),rla_obs(nobs))
 
-CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Timestamp', ila_times)
-CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Latitude', rla_lats)
-CALL READSLICE_H5DSET(h5state, 'GEOLOCALIZATION/Longitude', rla_lons)
-CALL READSLICE_H5DSET(h5state, 'OBSERVATIONS/'//trim(self%spcname)//'/Y', rla_obs)
+call readslice_h5dset(h5state, 'GEOLOCALIZATION/Timestamp', ila_times)
+call readslice_h5dset(h5state, 'GEOLOCALIZATION/Latitude', rla_lats)
+call readslice_h5dset(h5state, 'GEOLOCALIZATION/Longitude', rla_lons)
+call readslice_h5dset(h5state, 'OBSERVATIONS/'//trim(self%spcname)//'/Y', rla_obs)
 
 ! Setup observation vector for the locations
 call qg_obsvec_setup(obsloc,3,nobs)
@@ -485,10 +485,7 @@ do iobs=1,nobs
   obsval%values(:,iobs) = rla_obs(iobs)
   obserr%values(:,iobs) = rla_obs(iobs)
 enddo
-write(*,*) obsloc%values(1,:)
-write(*,*) obsloc%values(2,:)
-write(*,*) obsloc%values(3,:)
-write(*,*) obsval%values(1,:)
+
 ! Store observations data in the obsdb structure
 call qg_obsdb_create(self,trim(self%spcname),times,obsloc)
 call qg_obsdb_put(self,trim(self%spcname),'ObsValue',obsval)
@@ -496,15 +493,15 @@ call qg_obsdb_put(self,trim(self%spcname),'ObsError',obserr) ! This should not b
 
 deallocate(ila_times,rla_lats,rla_lons,rla_obs,times)
 
-CALL CLOSE_H5SPACE(h5state%memspace_id)
+call close_h5space(h5state%memspace_id)
 
-CALL CLOSE_H5SPACE(h5state%dataspace_id)
+call close_h5space(h5state%dataspace_id)
 
-CALL CLOSE_H5GROUP(h5state%instr_id)
+call close_h5group(h5state%instr_id)
 
-CALL CLOSE_H5FILE(il_hdat_id, .FALSE.)
+call close_h5file(il_hdat_id, .false.)
 
-CALL H5close_f(il_err)
+call H5close_f(il_err)
 
 end subroutine qg_obsdb_read
 ! ------------------------------------------------------------------------------

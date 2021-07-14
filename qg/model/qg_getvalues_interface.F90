@@ -9,6 +9,7 @@ use datetime_mod
 use iso_c_binding
 use kinds
 use qg_fields_mod
+use qg_fields_interface
 use qg_getvalues_mod
 use qg_geom_mod
 use qg_gom_mod

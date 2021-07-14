@@ -85,6 +85,7 @@ contains
      &                                          aq_field_stats_per_var, &
      &                                          aq_field_stats_per_var_lev
   procedure, public :: info                  => aq_field_info
+  procedure, public :: orientation           => aq_field_orientation
   procedure, public :: write                 => aq_field_write
   procedure, public :: read                  => aq_field_read
   procedure, public :: analytic_IC           => aq_field_ana_IC
@@ -1116,6 +1117,14 @@ subroutine aq_field_info(self, config)
   call stat_config%final()
 
 end subroutine aq_field_info
+
+function aq_field_orientation(this) result(orientation)
+  class(qg_fields), intent(in)  :: this
+  character(len=:), allocatable :: orientation
+  !
+  orientation = trim(this%geom%orientation)
+  !
+end function aq_field_orientation
 
 subroutine aq_field_read(self, config, date)
   class(qg_fields),          intent(inout) :: self

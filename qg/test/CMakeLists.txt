@@ -197,11 +197,11 @@ ecbuild_add_test( TARGET  test_qg_geometry
 #                  LIBS    qg
 #                  TEST_DEPENDS test_qg_truth )
 
-#ecbuild_add_test( TARGET  test_qg_geovals
-#                  SOURCES executables/TestGeoVaLs.cc
-#                  ARGS    "testinput/interfaces.yaml"
-#                  LIBS    qg
-#                  TEST_DEPENDS test_qg_make_obs_4d_24h )
+ecbuild_add_test( TARGET  test_qg_geovals
+                  SOURCES executables/TestGeoVaLs.cc
+                  ARGS    "testinput/interfaces.yaml"
+                  LIBS    qg
+                  TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET  test_qg_state
                   SOURCES executables/TestState.cc
@@ -220,7 +220,7 @@ ecbuild_add_test( TARGET  test_qg_state
 #                  ARGS    "testinput/interfaces.yaml"
 #                  LIBS    qg
 #                  TEST_DEPENDS test_qg_truth )
-#
+
 ecbuild_add_test( TARGET  test_qg_increment
                   SOURCES executables/TestIncrement.cc
                   ARGS    "testinput/interfaces.yaml"
@@ -257,7 +257,7 @@ ecbuild_add_test( TARGET  test_qg_increment
 #                  ARGS    "testinput/interfaces.yaml"
 #                  LIBS    qg
 #                  TEST_DEPENDS test_qg_truth )
-#
+
 ecbuild_add_test( TARGET test_qg_locations
                   SOURCES executables/TestLocations.cc
                   ARGS "testinput/interfaces.yaml"
@@ -348,13 +348,13 @@ ecbuild_add_test( TARGET  test_qg_obs_iterator
 #                  ARGS    "testinput/interfaces.yaml"
 #                  LIBS    qg
 #                  TEST_DEPENDS test_qg_truth )
-#
+
 #ecbuild_add_test( TARGET  test_qg_getvalues
 #                  SOURCES executables/TestGetValues.cc
 #                  ARGS    "testinput/getvalues.yaml"
 #                  LIBS    qg
 #                  TEST_DEPENDS test_qg_truth )
-#
+
 #ecbuild_add_test( TARGET  test_qg_lineargetvalues
 #                  SOURCES executables/TestLinearGetValues.cc
 #                  ARGS    "testinput/lineargetvalues.yaml"

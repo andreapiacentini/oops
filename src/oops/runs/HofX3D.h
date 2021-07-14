@@ -39,7 +39,7 @@ template <typename MODEL, typename OBS> class HofX3D : public Application {
   typedef CalcHofX<OBS>              CalcHofX_;
   typedef Geometry<MODEL>            Geometry_;
   typedef GeoVaLs<OBS>               GeoVaLs_;
-  typedef GetValues<MODEL, OBS>      GetValues_;
+  // typedef GetValues<MODEL, OBS>      GetValues_;
   typedef Locations<OBS>             Locations_;
   typedef ObsAuxControls<OBS>        ObsAux_;
   typedef Observations<OBS>          Observations_;
@@ -85,47 +85,45 @@ template <typename MODEL, typename OBS> class HofX3D : public Application {
     CalcHofX_ hofx(obspaces, obsConfig);
     hofx.initialize(obsaux);
 
-    obspaces.save();
-    return 0;
-
     // fill in GeoVaLs
-    // GeoVaLsVec_ geovals;
-    // const LocationsVec_ & locations = hofx.locations();
-    // const VariablesVec_ & vars = hofx.requiredVars();
-    // Log::debug() << "HofX3D: Required hofx size = " << hofx.requiredVars().size() << std::endl;
+    GeoVaLsVec_ geovals;
+    const LocationsVec_ & locations = hofx.locations();
+    const VariablesVec_ & vars = hofx.requiredVars();
+    Log::debug() << "HofX3D: Required hofx size = " << hofx.requiredVars().size() << std::endl;
 
-    // Variables geovars;
-    // Log::debug() << "HofX3D: Required vars size = " << vars.size() << std::endl;
-    // for (size_t jj = 0; jj < vars.size(); ++jj) {
-    //   Log::debug() << "HofX3D: Required vars:" << vars[jj] << std::endl;
-    //   geovars += vars[jj];
-    // }
-    // Log::debug() << "HofX3D: Required variables:" << geovars << std::endl;
+    Variables geovars;
+    Log::debug() << "HofX3D: Required vars size = " << vars.size() << std::endl;
+    for (size_t jj = 0; jj < vars.size(); ++jj) {
+      Log::debug() << "HofX3D: Required vars:" << vars[jj] << std::endl;
+      geovars += vars[jj];
+    }
+    Log::debug() << "HofX3D: Required variables:" << geovars << std::endl;
     // eckit::LocalConfiguration chvarconf;  // empty for now
     // ChangeVariables_ chvar(chvarconf, geometry, xx.variables(), geovars);
 
     // State_ zz(geometry, geovars, xx.validTime());
     // chvar.changeVar(xx, zz);
 
-    // std::vector<eckit::LocalConfiguration> getValuesConfig =
-    //   util::vectoriseAndFilter(obsConfig, "get values");
+    std::vector<eckit::LocalConfiguration> getValuesConfig =
+      util::vectoriseAndFilter(obsConfig, "get values");
 
-    //  // loop over all observation types
-    // for (size_t jj = 0; jj < obspaces.size(); ++jj) {
-    //   GetValues_ getvals(geometry, *locations[jj], getValuesConfig[jj]);
-    //   geovals.emplace_back(new GeoVaLs_(*locations[jj], vars[jj]));
-    //   getvals.fillGeoVaLs(zz, winbgn, winend, *geovals[jj]);
-    // }
+    // loop over all observation types
+    for (size_t jj = 0; jj < obspaces.size(); ++jj) {
+      // GetValues_ getvals(geometry, *locations[jj], getValuesConfig[jj]);
+      geovals.emplace_back(new GeoVaLs_(*locations[jj], vars[jj]));
+      // getvals.fillGeoVaLs(zz, winbgn, winend, *geovals[jj]);
+      // getvals.fillGeoVaLs(xx, winbgn, winend, *geovals[jj]);
+    }
 
-    // // Compute H(x) on filled in geovals and run the filters
-    // Observations_ yobs = hofx.compute(geovals);
-    // hofx.saveQcFlags("EffectiveQC");
-    // hofx.saveObsErrors("EffectiveError");
+    // Compute H(x) on filled in geovals and run the filters
+    Observations_ yobs = hofx.compute(geovals);
+    hofx.saveQcFlags("EffectiveQC");
+    hofx.saveObsErrors("EffectiveError");
 
-    // // Save H(x)
-    // Log::test() << "H(x): " << std::endl << yobs << "End H(x)" << std::endl;
-    // yobs.save("hofx");
-    // obspaces.save();
+    // Save H(x)
+    Log::test() << "H(x): " << std::endl << yobs << "End H(x)" << std::endl;
+    yobs.save("hofx");
+    obspaces.save();
 
     return 0;
   }

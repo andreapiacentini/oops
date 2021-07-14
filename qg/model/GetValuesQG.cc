@@ -42,6 +42,7 @@ void GetValuesQG::fillGeoVaLs(const StateQG & state, const util::DateTime & t1,
   const std::string interpType = conf_.getString("interpolation type", "default");
 
   if (interpType == "default" || (interpType.compare(0, 8, "default_") == 0)) {
+    oops::Log::trace() << state.fields() << std::endl;
     qg_getvalues_interp_f90(locs_, state.fields().toFortran(), t1, t2, gom.toFortran());
   } else {
     std::string err_message("interpolation type option " + interpType + " not supported");

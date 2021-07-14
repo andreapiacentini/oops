@@ -27,7 +27,7 @@ static ObsOpMaker<ObsStreamQG> makerStream_("Stream");
 // -----------------------------------------------------------------------------
 
 ObsStreamQG::ObsStreamQG(const ObsSpaceQG & odb, const eckit::Configuration & config)
-  : obsdb_(odb), varin_(std::vector<std::string>{"x"})
+  : obsdb_(odb), varin_(std::vector<std::string>{config.getString("mod var")})
 {
   oops::Log::trace() << "ObsStreamQG created." << std::endl;
 }
