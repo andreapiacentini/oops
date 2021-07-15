@@ -211,26 +211,6 @@ end do
 c_model(length+1) = C_NULL_CHAR
 
 end subroutine qg_geom_info_c
-! ------------------------------------------------------------------------------
-!> Get dimensions of computational domain
-subroutine qg_geom_dimensions_c(lonmin, lonmax, latmin, latmax, zmax) bind(c,name='qg_geom_dimensions_f90')
-
-    use qg_constants_mod
-    implicit none
-
-    ! Passed variables
-    real(c_double), intent(inout) :: lonmin  !< longitude min
-    real(c_double), intent(inout) :: lonmax  !< longitude max
-    real(c_double), intent(inout) :: latmin  !< latitude min
-    real(c_double), intent(inout) :: latmax  !< latitude max
-    real(c_double), intent(inout) :: zmax    !< vertical max
-
-    ! call xy_to_lonlat(0.0_kind_real, 0.0_kind_real, lonmin, latmin)
-    ! call xy_to_lonlat(domain_zonal, domain_meridional, lonmax, latmax)
-
-    ! zmax = domain_depth
-
-end subroutine qg_geom_dimensions_c
 
 ! ------------------------------------------------------------------------------
 end module qg_geom_interface

@@ -349,19 +349,19 @@ ecbuild_add_test( TARGET  test_qg_obs_iterator
 #                  LIBS    qg
 #                  TEST_DEPENDS test_qg_truth )
 
-#ecbuild_add_test( TARGET  test_qg_getvalues
-#                  SOURCES executables/TestGetValues.cc
-#                  ARGS    "testinput/getvalues.yaml"
-#                  LIBS    qg
-#                  TEST_DEPENDS test_qg_truth )
+ecbuild_add_test( TARGET  test_qg_getvalues
+                  SOURCES executables/TestGetValues.cc
+                  ARGS    "testinput/getvalues.yaml"
+                  LIBS    qg
+                  TEST_DEPENDS test_qg_truth )
 
-#ecbuild_add_test( TARGET  test_qg_lineargetvalues
-#                  SOURCES executables/TestLinearGetValues.cc
-#                  ARGS    "testinput/lineargetvalues.yaml"
-#                  LIBS    qg
-#                  TEST_DEPENDS test_qg_truth )
-#
-#
+ecbuild_add_test( TARGET  test_qg_lineargetvalues
+                  SOURCES executables/TestLinearGetValues.cc
+                  ARGS    "testinput/lineargetvalues.yaml"
+                  LIBS    qg
+                  TEST_DEPENDS test_qg_truth )
+
+
 #####################################################################
 # forecast-related tests
 #####################################################################

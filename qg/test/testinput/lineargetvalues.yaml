@@ -1,8 +1,19 @@
-geometry:
-  nx: 40
-  ny: 20
-  depths: [4500.0, 5500.0]
-state variables: [u, v]
+variables: &vars
+  - CO
+  - O_3
+  - NO_2
+gems02 geometry: &gems02_geom
+  nx: 260
+  ny: 200
+  dx: 0.2
+  dy: 0.2
+  x0: -15.9
+  y0:  32.1
+  domain: GEMS02
+  levels: 5
+  orientation: up
+geometry: *gems02_geom
+state variables: [CO]
 linear getvalues test:
   tolerance linearity: 1.0e-11
   iterations TL: 10
@@ -10,12 +21,16 @@ linear getvalues test:
   tolerance TL: 1.0e-11
   tolerance AD: 1.0e-11
 locations:
-  window begin: 2010-01-01T00:00:00Z
-  window end: 2010-01-02T00:00:00Z
-  nrandom: 8
-  lons: [-10.0, 12.0]
-  lats: [35.0, 45.0]
-  z: [5000, 9000]
+  window begin: 2010-07-04T01:00:00Z
+  window end: 2010-07-04T02:00:00Z
+  lons: [ -10, -8, 3, 15, 18, 24, 30, 33]
+  lats: [  35, 64, 41, 50, 60, 33, 48, 34]
+  nrandom: 10
+  random lon min: -15.9
+  random lon max: 35.9
+  random lat min: 32.1
+  random lat max: 69.9      
 background:
-  date: 2009-12-31T00:00:00Z
-  filename: Data/truth.fc.2009-12-15T00:00:00Z.P16D.nc
+  date: 2010-07-04T01:00:00Z
+  filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001/HMGEMS02+2010070401.nc
+  state variables: *vars

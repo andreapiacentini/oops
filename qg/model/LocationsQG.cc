@@ -46,10 +46,11 @@ LocationsQG::LocationsQG(const eckit::Configuration & config, const eckit::mpi::
     */
     lons = config.getDoubleVector("lons");
     lats = config.getDoubleVector("lats");
-    z  = config.getDoubleVector("z");
 
     ASSERT(lons.size() == lats.size());
-    ASSERT(lons.size() == z.size());
+    for (std::size_t jj=0; jj < lons.size(); ++jj) {
+      z.push_back(0.);
+    }
 
     /*! Instead of or in addition to the specific locations in the config file
     * let the user specify a number of random locations
@@ -65,8 +66,11 @@ LocationsQG::LocationsQG(const eckit::Configuration & config, const eckit::mpi::
     /*! To create random locations, we need to know the dimensions of the
     * computational domain
     */
-    double lonmin, lonmax, latmin, latmax, zmax;
-    qg_geom_dimensions_f90(lonmin, lonmax, latmin, latmax, zmax);
+    double lonmin = config.getDouble("random lon min");
+    double lonmax = config.getDouble("random lon max");
+    double latmin = config.getDouble("random lat min");
+    double latmax = config.getDouble("random lat max");
+    
 
     /*! Now create random locations
     * use a specified random seed for reproducibility
@@ -75,13 +79,12 @@ LocationsQG::LocationsQG(const eckit::Configuration & config, const eckit::mpi::
     std::uint32_t rseed = 11;
     util::UniformDistribution<double> randlons(nrandom, lonmin, lonmax, rseed);
     util::UniformDistribution<double> randlats(nrandom, latmin, latmax);
-    util::UniformDistribution<double> randzs(nrandom, 0.0, zmax);
     randlons.sort();
 
     for (std::size_t jj=0; jj < nrandom; ++jj) {
       lons.push_back(randlons[jj]);
       lats.push_back(randlats[jj]);
-      z.push_back(randzs[jj]);
+      z.push_back(0.);
     }
   }
 
