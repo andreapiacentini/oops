@@ -130,6 +130,7 @@ qg_stream_mod.F90
 aq_constants_mod.F90
 aq_blas_mod.F90
 aq_field_io_mod.F90
+aq_interp_mod.F90
 )
 
 ecbuild_add_library( TARGET   qg

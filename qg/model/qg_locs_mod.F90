@@ -13,6 +13,9 @@ use iso_c_binding
 use kinds
 use datetime_mod
 
+!AQ interpolator draft
+use interp_matrix_structure_mod, only : csr_format
+
 implicit none
 private
 public :: qg_locs
@@ -21,6 +24,8 @@ integer,parameter :: rseed = 1 !< Random seed (for reproducibility)
 
 type :: qg_locs
   type(c_ptr), private :: ptr
+  !AQ interpolator draft
+  type(csr_format) :: Hmat             !< Matrix for linear interpolator
 contains
 procedure, public :: nlocs => locs_nlocs
 procedure, public :: lonlat => locs_lonlat

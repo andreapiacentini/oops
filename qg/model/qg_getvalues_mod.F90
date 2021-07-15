@@ -20,6 +20,11 @@ use qg_gom_mod
 use qg_locs_mod
 use aq_constants_mod
 
+!AQ interpolator draft
+use space_time_operator_mod, only : observ_operator
+use matrix_manipulations, only : multiply_matrix_csr_vector, addmult_matrixt_csr_vector
+
+
 implicit none
 
 private
@@ -36,20 +41,27 @@ subroutine qg_getvalues_interp(locs,fld,t1,t2,gom)
 implicit none
 
 ! Passed variables
-type(qg_locs), intent(in) :: locs      !< Locations
+type(qg_locs), intent(inout) :: locs      !< Locations
 type(qg_fields),intent(in) :: fld      !< Fields
 type(datetime),intent(in) :: t1, t2    !< times
 type(qg_gom),intent(inout) :: gom      !< Interpolated values
 
 ! Local variables
 integer :: jloc
-integer :: nlev = 1
 real(kind_real), pointer :: lonlat(:,:), z(:)
 type(atlas_field) :: lonlat_field, z_field
-! type(qg_fields) :: fld_gom
+!AQ type(qg_fields) :: fld_gom
+
+!AQ interpolator draft
+integer :: nlev = 1
 real(aq_real), allocatable, dimension(:,:) :: surf_fld
 integer       :: n_vars
 character(len=:), allocatable :: var_name(:)
+integer :: ib
+real(kind_real), allocatable :: lonmod(:), latmod(:)
+real(kind_real), dimension(1,1) :: dummylev
+real(kind_real), dimension(1) :: dummycoord
+real(kind_real), dimension(:), allocatable :: dummytime
 
 ! Get locations
 lonlat_field = locs%lonlat()
@@ -57,14 +69,14 @@ call lonlat_field%data(lonlat)
 z_field = locs%altitude()
 call z_field%data(z)
 
-! Check field
-! call qg_fields_check(fld)
+!AQ Check field
+!AQ call qg_fields_check(fld)
 
-! Create field with GOM variables (mistake?)
-! call qg_fields_create(fld_gom,fld%geom,gom%vars,.true.)
+!AQ Create field with GOM variables (mistake?)
+!AQ call qg_fields_create(fld_gom,fld%geom,gom%vars,.true.)
 
-! Apply change of variables (mistake?)
-! call qg_change_var(fld,fld_gom)
+!AQ Apply change of variables (mistake?)
+!AQ call qg_change_var(fld,fld_gom)
 
 if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
 
@@ -77,20 +89,64 @@ call fld%gather_var_at_lev(trim(var_name(1)), nlev, surf_fld, 0)
 
 if (fld%geom%fmpi%rank() == 0) then
   write(*,*) 'Interpolate ',trim(var_name(1)),' at lev ',nlev,' max fld', maxval(surf_fld),' min fld', minval(surf_fld)
-  write(*,*) 'on latlon'
-  write(*,*) lonlat(1,:20)
-  write(*,*) lonlat(2,:20)
-  write(*,*) z(:20)
-!$omp parallel do schedule(static) private(jloc)
-  do jloc=1,locs%nlocs()
-    ! Check if current obs is in this time frame (t1,t2]
-    if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
-      ! Interpolate variables
-      ! call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-      ! &                                               z(jloc),surf_fld,gom%x(jloc))
-    endif
-  enddo
-!$omp end parallel do
+
+  !AQ could be stored once for all in the geometry so to avoid the extraction at every obs operator.
+  allocate(lonmod(fld%geom%grid%nx(1)))
+  allocate(latmod(fld%geom%grid%ny()))
+  do ib = 1, fld%geom%grid%nx(1)
+     lonmod(ib) = fld%geom%grid%x(ib,1)
+  end do
+  do ib = 1, fld%geom%grid%ny()
+     latmod(ib) = fld%geom%grid%y(ib)
+  end do
+  allocate(dummytime(locs%nlocs()))
+  dummytime(:) = 0_kind_real
+  
+  call observ_operator ( &
+     &   fld%geom%grid%ny(), &
+     &   fld%geom%grid%nx(1), &
+     &   1, & ! Only on input level in the gathered surface field
+     &   1, & ! Only one exact time (no time interpolation)
+     &   latmod, &
+     &   lonmod, &
+     &   dummycoord, & ! Vert coord not relevat
+     &   dummycoord, & ! Obs time not relevant
+     &   locs%nlocs(), &
+     &   1, & ! Levels in and out are 1
+     &   1, &
+     &   lonlat(2,:), &
+     &   lonlat(1,:), &
+     &   .false., & ! aq grid not considered as lon periodic
+     &   dummytime, &
+     &   dummylev, &
+     &   2, & ! It is the ground interpolator option
+     &   .false., & ! no input scaling
+     &   .false., & ! no averaging kernel
+     &   .false., & ! no time interpolation
+     &   locs%Hmat)
+
+  call multiply_matrix_csr_vector( &
+     &   locs%Hmat, &
+     &   pack(surf_fld,.true.), &
+     &   1, &
+     &   locs%nlocs(), &
+     &   gom%x)
+
+  write(*,*) 'Interpolated ',trim(var_name(1)),' at lev ',nlev,' max Hx', maxval(gom%x),' min Hx', minval(gom%x)
+  
+!AQ!$omp parallel do schedule(static) private(jloc)
+!AQ  do jloc=1,locs%nlocs()
+!AQ    ! Check if current obs is in this time frame (t1,t2]
+!AQ    if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
+!AQ      ! Interpolate variables
+!AQ      ! call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
+!AQ      ! &                                               z(jloc),surf_fld,gom%x(jloc))
+!AQ    endif
+!AQ  enddo
+!AQ!$omp end parallel do
+  deallocate(lonmod)
+  deallocate(latmod)
+  deallocate(dummytime)
 endif
 !Release memory
 deallocate(surf_fld)
@@ -114,7 +170,13 @@ type(qg_gom),intent(inout) :: gom      !< Interpolated values
 integer :: jloc
 real(kind_real), pointer :: lonlat(:,:), z(:)
 type(atlas_field) :: lonlat_field, z_field
-type(qg_fields) :: fld_gom
+!AQ type(qg_fields) :: fld_gom
+
+!AQ interpolator draft
+integer :: nlev = 1
+real(aq_real), allocatable, dimension(:,:) :: surf_fld
+integer       :: n_vars
+character(len=:), allocatable :: var_name(:)
 
 ! Get locations
 lonlat_field = locs%lonlat()
@@ -131,24 +193,40 @@ call z_field%data(z)
 ! ! Apply change of variables
 ! call qg_change_var_tl(fld,fld_gom)
 
-! !$omp parallel do schedule(static) private(jloc)
-! do jloc=1,locs%nlocs()
-!   ! Check if current obs is in this time frame (t1,t2]
-!   if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
-!     ! Interpolate variables
-!     if (gom%vars%has('x')) call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!     &                                               z(jloc),fld_gom%x,gom%x(jloc))
-!     if (gom%vars%has('q')) call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!     &                                               z(jloc),fld_gom%q,gom%q(jloc))
-!     if (gom%vars%has('u')) call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!     &                                               z(jloc),fld_gom%u,gom%u(jloc))
-!     if (gom%vars%has('v')) call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!     &                                               z(jloc),fld_gom%v,gom%v(jloc))
-!   endif
-! enddo
-! !$omp end parallel do
+if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
+
+n_vars = gom%vars%nvars()
+if (n_vars.ne.1) call abor1_ftn('Getvalues interpolates only one field (variable)')
+
+var_name = gom%vars%varlist()
+allocate(surf_fld(fld%geom%grid%nx(1),fld%geom%grid%ny()))
+call fld%gather_var_at_lev(trim(var_name(1)), nlev, surf_fld, 0)
+
+if (fld%geom%fmpi%rank() == 0) then
+  call multiply_matrix_csr_vector( &
+     &   locs%Hmat, &
+     &   pack(surf_fld,.true.), &
+     &   1, &
+     &   locs%nlocs(), &
+     &   gom%x)
+
+  write(*,*) 'Interpolated ',trim(var_name(1)),' at lev ',nlev,' max Hx', maxval(gom%x),' min Hx', minval(gom%x)
+endif
+
+
+!AQ!$omp parallel do schedule(static) private(jloc)
+!AQdo jloc=1,locs%nlocs()
+!AQ  ! Check if current obs is in this time frame (t1,t2]
+!AQ  if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
+!AQ    ! Interpolate variables
+!AQ    call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
+!AQ                             z(jloc),fld_gom%x,gom%x(jloc))
+!AQ  endif
+!AQenddo
+!AQ!$omp end parallel do
 
 ! Release memory
+deallocate(surf_fld)
 call lonlat_field%final()
 call z_field%final()
 
@@ -170,7 +248,14 @@ integer :: jloc
 real(kind_real),allocatable :: x(:,:,:),q(:,:,:),u(:,:,:),v(:,:,:)
 real(kind_real), pointer :: lonlat(:,:), z(:)
 type(atlas_field) :: lonlat_field, z_field
-type(qg_fields) :: fld_gom,fld_tmp
+!AQ type(qg_fields) :: fld_gom,fld_tmp
+
+!AQ interpolator draft
+integer :: nlev = 1
+real(aq_real), allocatable, dimension(:) :: surf_1d
+real(aq_real), allocatable, dimension(:,:) :: surf_fld
+integer       :: n_vars
+character(len=:), allocatable :: var_name(:)
 
 ! Get locations
 lonlat_field = locs%lonlat()
@@ -187,20 +272,39 @@ call z_field%data(z)
 ! ! Initialization
 ! call qg_fields_zero(fld_gom)
 
-! do jloc=locs%nlocs(),1,-1
-!   ! Check if current obs is in this time frame (t1,t2]
-!   if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
-!     ! Interpolate variables
-!     if (gom%vars%has('x')) call qg_interp_trilinear_ad(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!     &                                                  z(jloc),gom%x(jloc),fld_gom%x)
-!     if (gom%vars%has('q')) call qg_interp_trilinear_ad(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!     &                                                  z(jloc),gom%q(jloc),fld_gom%q)
-!     if (gom%vars%has('u')) call qg_interp_trilinear_ad(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!     &                                                  z(jloc),gom%u(jloc),fld_gom%u)
-!     if (gom%vars%has('v')) call qg_interp_trilinear_ad(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!     &                                                  z(jloc),gom%v(jloc),fld_gom%v)
-!   endif
-! enddo
+if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
+
+n_vars = gom%vars%nvars()
+if (n_vars.ne.1) call abor1_ftn('Getvalues interpolates only one field (variable)')
+
+var_name = gom%vars%varlist()
+allocate(surf_fld(fld%geom%grid%nx(1),fld%geom%grid%ny()))
+surf_fld(:,:) = 0_kind_real
+
+!AQdo jloc=locs%nlocs(),1,-1
+!AQ  ! Check if current obs is in this time frame (t1,t2]
+!AQ  if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
+!AQ    ! Interpolate variables
+!AQ    call qg_interp_trilinear_ad(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
+!AQ    &                                                  z(jloc),gom%x(jloc),fld_gom%x)
+!AQ  endif
+!AQenddo
+
+if (fld%geom%fmpi%rank() == 0) then
+
+   allocate(surf_1d(fld%geom%grid%nx(1)*fld%geom%grid%ny()))
+   surf_1d = 0_kind_real
+   call addmult_matrixt_csr_vector( &
+      &   locs%Hmat, &
+      &   gom%x, &
+      &   1, &
+      &   locs%nlocs(), &
+      &   surf_1d)
+   surf_fld = unpack(surf_1d,surf_fld==0_kind_real,surf_fld)
+   deallocate(surf_1d)
+endif
+
+call fld%scatteradd_var_at_lev(trim(var_name(1)), nlev, surf_fld, 0)
 
 ! ! Apply change of variables
 ! call qg_fields_create_from_other(fld_tmp,fld,fld%geom)
@@ -208,6 +312,7 @@ call z_field%data(z)
 ! call qg_fields_self_add(fld,fld_tmp)
 
 ! Release memory
+deallocate(surf_1d)
 call lonlat_field%final()
 call z_field%final()
 
