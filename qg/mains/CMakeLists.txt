@@ -48,11 +48,11 @@ ecbuild_add_executable( TARGET  qg_addincrement.x
                         LIBS    qg
                       )
 
-#ecbuild_add_executable( TARGET  qg_dirac.x
-#                        SOURCES qgDirac.cc
-#                        LIBS    qg
-#                      )
-#
+ecbuild_add_executable( TARGET  qg_dirac.x
+                        SOURCES qgDirac.cc
+                        LIBS    qg
+                      )
+
 #ecbuild_add_executable( TARGET  qg_staticbinit.x
 #                        SOURCES qgStaticBInit.cc
 #                        LIBS    qg

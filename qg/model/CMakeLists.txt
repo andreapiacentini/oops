@@ -5,8 +5,8 @@ AnalyticInit.h
 #ChangeVarQG.h
 #ChangeVarTLADQG.cc
 #ChangeVarTLADQG.h
-#ErrorCovarianceQG.cc
-#ErrorCovarianceQG.h
+ErrorCovarianceQG.cc
+ErrorCovarianceQG.h
 FieldsQG.cc
 FieldsQG.h
 GeometryQG.cc
@@ -27,8 +27,8 @@ IncrementQG.cc
 IncrementQG.h
 LocationsQG.cc
 LocationsQG.h
-#LocalizationMatrixQG.cc
-#LocalizationMatrixQG.h
+LocalizationMatrixQG.cc
+LocalizationMatrixQG.h
 #ModelBias.h
 #ModelBiasCovariance.h
 #ModelBiasIncrement.h
@@ -85,7 +85,7 @@ StateQG.h
 #fft_f.h
 #fft_mod.F90
 #instantiateQgChangeVarFactory.h
-#instantiateQgLocalizationFactory.h
+instantiateQgLocalizationFactory.h
 #qg_advect_q_mod.F90
 #qg_change_var_interface.F90
 #qg_change_var_mod.F90

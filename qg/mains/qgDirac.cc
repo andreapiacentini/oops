@@ -8,7 +8,7 @@
  * does it submit to any jurisdiction.
  */
 
-#include "model/instantiateQgChangeVarFactory.h"
+//AQ #include "model/instantiateQgChangeVarFactory.h"
 #include "model/instantiateQgLocalizationFactory.h"
 #include "model/QgTraits.h"
 #include "oops/runs/Dirac.h"
@@ -16,7 +16,7 @@
 
 int main(int argc,  char ** argv) {
   oops::Run run(argc, argv);
-  qg::instantiateQgChangeVarFactory();
+  //AQ qg::instantiateQgChangeVarFactory();
   qg::instantiateQgLocalizationFactory();
   oops::Dirac<qg::QgTraits> dir;
   return run.execute(dir);

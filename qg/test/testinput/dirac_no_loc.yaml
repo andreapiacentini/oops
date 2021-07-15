@@ -1,50 +1,70 @@
+variables: &vars
+  - CO
+  - O_3
+  - NO_2
+gems02 geometry: &gems02_geom
+  nx: 260
+  ny: 200
+  dx: 0.2
+  dy: 0.2
+  x0: -15.9
+  y0:  32.1
+  domain: GEMS02
+  levels: 5
+  orientation: up
+geometry: *gems02_geom
+
+# Mnemonics:
+memo:
+  - &state_ref
+    date: 2010-07-04T01:00:00Z
+    filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001/HMGEMS02+2010070401.nc
+    state variables: *vars
+
 background error:
   covariance model: ensemble
   members:
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.1.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.2.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.3.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.4.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.5.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.6.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.7.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.8.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.9.2009-12-31T00:00:00Z.P1DT12H.nc
-  - date: 2010-01-01T12:00:00Z
-    filename: Data/forecast.ens.10.2009-12-31T00:00:00Z.P1DT12H.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0002/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0003/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0004/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0005/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0006/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0007/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0008/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0009/HMGEMS02+2010070401.nc
+    - <<: *state_ref
+      filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0010/HMGEMS02+2010070401.nc
+
 dirac:
-  date: 2010-01-01T12:00:00Z
-  ixdir: [20]
-  iydir: [10]
-  izdir: [1]
-  var: x
-geometry:
-  nx: 40
-  ny: 20
-  depths: [4500.0, 5500.0]
+  date: 2010-07-04T01:00:00Z
+  ixdir: [ 120]    
+  iydir: [  32]    
+  ildir: [   1]   
+  var:   ['CO']
+  
 initial condition:
-  date: 2010-01-01T12:00:00Z
-  filename: Data/forecast.fc.2009-12-31T00:00:00Z.P1DT12H.nc
+  date: 2010-07-04T01:00:00Z
+  filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001/HMGEMS02+2010070400.nc
+  state variables: *vars
 model:
   tstep: PT1H
 output B:
   datadir: Data
-  date: 2010-01-01T12:00:00Z
-  exp: dirac_no_loc_B
-  type: an
+  date: 2010-07-04T01:00:00Z
+  filename: Data/CBGEMS02+2010070401.nc
 output variance:
-  datadir: Data
-  exp: dirac_no_loc_var
-  type: an
+  date: 2010-07-04T01:00:00Z
+  filename: Data/CVGEMS02+2010070401.nc
 
 test:
-  reference filename: testoutput/dirac_no_loc.test
+  reference filename: ../test/testoutput/dirac_no_loc.test

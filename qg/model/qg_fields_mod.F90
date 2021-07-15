@@ -377,11 +377,12 @@ subroutine aq_field_dirac(self, config)
   !
   integer :: ib_dir
   !
-  call config%get_or_die("ndir", ndir)
+  ndir = config%get_size("ixdir")
+  !
   call config%get_or_die("ixdir", ixdir)
   call config%get_or_die("iydir", iydir)
   call config%get_or_die("ildir", ildir)
-  call config%get_or_die("ifdir", ifdir)
+  call config%get_or_die("var",   ifdir)
   !
   call self%zero()
   !

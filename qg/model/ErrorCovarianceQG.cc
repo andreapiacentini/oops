@@ -16,7 +16,7 @@
 #include "model/FieldsQG.h"
 #include "model/GeometryQG.h"
 #include "model/IncrementQG.h"
-#include "model/QgFortran.h"
+//AQ #include "model/QgFortran.h"
 #include "model/StateQG.h"
 #include "oops/assimilation/GMRESR.h"
 #include "oops/base/IdentityMatrix.h"
@@ -29,17 +29,14 @@ namespace qg {
 ErrorCovarianceQG::ErrorCovarianceQG(const GeometryQG & resol, const oops::Variables & vars,
                                      const eckit::Configuration & conf,
                                      const StateQG &, const StateQG &) {
-  qg_error_covariance_setup_f90(keyConfig_, conf, resol.toFortran());
   oops::Log::trace() << "ErrorCovarianceQG created" << std::endl;
 }
 // -----------------------------------------------------------------------------
 ErrorCovarianceQG::~ErrorCovarianceQG() {
-  qg_error_covariance_delete_f90(keyConfig_);
   oops::Log::trace() << "ErrorCovarianceQG destructed" << std::endl;
 }
 // -----------------------------------------------------------------------------
 void ErrorCovarianceQG::multiply(const IncrementQG & dxin, IncrementQG & dxout) const {
-  qg_error_covariance_mult_f90(keyConfig_, dxin.fields().toFortran(), dxout.fields().toFortran());
 }
 // -----------------------------------------------------------------------------
 void ErrorCovarianceQG::inverseMultiply(const IncrementQG & dxin, IncrementQG & dxout) const {
@@ -49,7 +46,6 @@ void ErrorCovarianceQG::inverseMultiply(const IncrementQG & dxin, IncrementQG & 
 }
 // -----------------------------------------------------------------------------
 void ErrorCovarianceQG::randomize(IncrementQG & dx) const {
-  qg_error_covariance_randomize_f90(keyConfig_, dx.fields().toFortran());
 }
 // -----------------------------------------------------------------------------
 void ErrorCovarianceQG::print(std::ostream & os) const {

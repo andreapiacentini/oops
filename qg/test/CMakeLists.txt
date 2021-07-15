@@ -545,13 +545,13 @@ ecbuild_add_test( TARGET test_qg_ens_variance_inflation_value
 #                  COMMAND  qg_dirac.x
 #                  TEST_DEPENDS test_qg_forecast test_qg_gen_ens_pert_B )
 #
-#ecbuild_add_test( TARGET test_qg_dirac_no_loc
-#                  OMP 2
-#                  ARGS testinput/dirac_no_loc.yaml
-#                  COMMAND  qg_dirac.x
-#                  TEST_DEPENDS test_qg_forecast test_qg_gen_ens_pert_B )
-#
-#
+ecbuild_add_test( TARGET test_qg_dirac_no_loc
+                  OMP 2
+                  ARGS testinput/dirac_no_loc.yaml
+                  COMMAND  qg_dirac.x
+                  TEST_DEPENDS test_qg_forecast test_qg_gen_ens_pert_B )
+
+
 #####################################################################
 # 3d variational tests
 #####################################################################

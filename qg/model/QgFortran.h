@@ -73,17 +73,6 @@ extern "C" {
   void qg_change_var_ad_f90(const F90flds &, const F90flds &);
 
 // -----------------------------------------------------------------------------
-//  Error covariance
-// -----------------------------------------------------------------------------
-  void qg_error_covariance_setup_f90(F90error_covariance &, const eckit::Configuration &,
-                                     const F90geom &);
-  void qg_error_covariance_delete_f90(F90error_covariance &);
-  void qg_error_covariance_mult_f90(const F90error_covariance &, const F90flds &, const F90flds &);
-  void qg_error_covariance_inv_mult_f90(const F90error_covariance &, const F90flds &,
-                                        const F90flds &);
-  void qg_error_covariance_randomize_f90(const F90error_covariance &, const F90flds &);
-
-// -----------------------------------------------------------------------------
 //  Fields
 // -----------------------------------------------------------------------------
   void qg_fields_create_f90(F90flds &, const F90geom &, const oops::Variables &);
