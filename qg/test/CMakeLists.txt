@@ -199,13 +199,13 @@ ecbuild_add_test( TARGET  test_qg_geometry
 
 ecbuild_add_test( TARGET  test_qg_geovals
                   SOURCES executables/TestGeoVaLs.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET  test_qg_state
                   SOURCES executables/TestState.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_truth )
 
@@ -223,7 +223,7 @@ ecbuild_add_test( TARGET  test_qg_state
 
 ecbuild_add_test( TARGET  test_qg_increment
                   SOURCES executables/TestIncrement.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_truth )
 
@@ -260,67 +260,67 @@ ecbuild_add_test( TARGET  test_qg_increment
 
 ecbuild_add_test( TARGET test_qg_locations
                   SOURCES executables/TestLocations.cc
-                  ARGS "testinput/interfaces.yaml"
+                  ARGS "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_truth )
 
 ecbuild_add_test( TARGET test_qg_obsspace
                   SOURCES executables/TestObsSpace.cc
-                  ARGS "testinput/interfaces.yaml"
+                  ARGS "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET test_qg_obs_vector
                   SOURCES executables/TestObsVector.cc
-                  ARGS "testinput/interfaces.yaml"
+                  ARGS "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET test_qg_obsdatavector
                   SOURCES executables/TestObsDataVector.cc
-                  ARGS "testinput/interfaces.yaml"
+                  ARGS "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET  test_qg_obs_operator
                   SOURCES executables/TestObsOperator.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET  test_qg_lin_obs_operator
                   SOURCES executables/TestLinearObsOperator.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET test_qg_obs_error_covar
                   SOURCES executables/TestObsErrorCovariance.cc
-                  ARGS "testinput/interfaces.yaml"
+                  ARGS "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET  test_qg_obs_aux
                   SOURCES executables/TestObsAuxControl.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET  test_qg_obs_aux_increment
                   SOURCES executables/TestObsAuxIncrement.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET  test_qg_obs_aux_covariance
                   SOURCES executables/TestObsAuxCovariance.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
 ecbuild_add_test( TARGET  test_qg_obs_iterator
                   SOURCES executables/TestObsIterator.cc
-                  ARGS    "testinput/interfaces.yaml"
+                  ARGS    "testinput/aq_interfaces.yaml"
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
@@ -406,12 +406,12 @@ ecbuild_add_test( TARGET  test_qg_lineargetvalues
 #                  COMMAND  qg_hofx.x
 #                  TEST_DEPENDS test_qg_make_obs_4d_12h )
 #
-#ecbuild_add_test( TARGET test_qg_hofx3d
-#                  OMP 2
-#                  ARGS testinput/hofx3d.yaml
-#                  COMMAND  qg_hofx3d.x
-#                  TEST_DEPENDS test_qg_make_obs_4d_12h )
-#
+ecbuild_add_test( TARGET test_qg_hofx3d
+                  OMP 2
+                  ARGS testinput/hofx3d.yaml
+                  COMMAND  qg_hofx3d.x
+                  TEST_DEPENDS test_qg_make_obs_4d_12h )
+
 #####################################################################
 # ensemble-related tests
 #####################################################################
