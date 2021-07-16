@@ -1,10 +1,13 @@
 list( APPEND oops_qg_src_files
 AnalyticInit.cc
 AnalyticInit.h
-#ChangeVarQG.cc
-#ChangeVarQG.h
-#ChangeVarTLADQG.cc
-#ChangeVarTLADQG.h
+# The ChangeVar (direct and TLAD are not needed for AQ)
+# they are only here to let saber compile
+ChangeVarQG.cc
+ChangeVarQG.h
+ChangeVarTLADQG.cc
+ChangeVarTLADQG.h
+# End
 ErrorCovarianceQG.cc
 ErrorCovarianceQG.h
 FieldsQG.cc

@@ -68,9 +68,9 @@ extern "C" {
 // -----------------------------------------------------------------------------
 //  Change of variable
 // -----------------------------------------------------------------------------
-  void qg_change_var_f90(const F90flds &, const F90flds &);
-  void qg_change_var_tl_f90(const F90flds &, const F90flds &);
-  void qg_change_var_ad_f90(const F90flds &, const F90flds &);
+//AQ  void qg_change_var_f90(const F90flds &, const F90flds &);
+//AQ  void qg_change_var_tl_f90(const F90flds &, const F90flds &);
+//AQ  void qg_change_var_ad_f90(const F90flds &, const F90flds &);
 
 // -----------------------------------------------------------------------------
 //  Fields

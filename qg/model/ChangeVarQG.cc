@@ -22,11 +22,11 @@ ChangeVarQG::ChangeVarQG(const GeometryQG &, const eckit::Configuration &) {}
 ChangeVarQG::~ChangeVarQG() {}
 // -----------------------------------------------------------------------------
 void ChangeVarQG::changeVar(const StateQG & xa, StateQG & xm) const {
-  qg_change_var_f90(xa.fields().toFortran(), xm.fields().toFortran());
+  //AQ  qg_change_var_f90(xa.fields().toFortran(), xm.fields().toFortran());
 }
 // -----------------------------------------------------------------------------
 void ChangeVarQG::changeVarInverse(const StateQG & xm, StateQG & xa) const {
-  qg_change_var_f90(xm.fields().toFortran(), xa.fields().toFortran());
+  //AQ qg_change_var_f90(xm.fields().toFortran(), xa.fields().toFortran());
 }
 // -----------------------------------------------------------------------------
 void ChangeVarQG::print(std::ostream & os) const {
