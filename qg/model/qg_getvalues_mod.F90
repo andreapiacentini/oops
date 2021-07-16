@@ -10,17 +10,14 @@ use datetime_mod
 use fckit_log_module,only: fckit_log
 use iso_c_binding
 use kinds
-!$ use omp_lib
 use oops_variables_mod
-!AQ use qg_change_var_mod
 use qg_fields_mod
 use qg_geom_mod
 use qg_gom_mod
-!AQ use qg_interp_mod
 use qg_locs_mod
 use aq_constants_mod
 
-!AQ interpolator draft
+!AQ interpolator
 use interp_matrix_structure_mod, only : csr_format
 use space_time_operator_mod, only : observ_operator
 use matrix_manipulations, only : multiply_matrix_csr_vector, addmult_matrixt_csr_vector
@@ -29,12 +26,110 @@ use matrix_manipulations, only : multiply_matrix_csr_vector, addmult_matrixt_csr
 implicit none
 
 private
-public :: qg_getvalues_interp, qg_getvalues_interp_tl, qg_getvalues_interp_ad
+public :: qg_hmat_registry
+public :: qg_getvalues_interp, qg_getvalues_build, qg_getvalues_interp_tl, qg_getvalues_interp_ad
 
+#define LISTED_TYPE csr_format
+
+!> Linked list interface - defines registry_t type
+#include "oops/util/linkedList_i.f"
+
+!> Global registry
+type(registry_t) :: qg_hmat_registry
 ! ------------------------------------------------------------------------------
 contains
 ! ------------------------------------------------------------------------------
 ! Public
+! ------------------------------------------------------------------------------
+!> Linked list implementation
+#include "oops/util/linkedList_c.f"
+! ------------------------------------------------------------------------------
+!> Build an interpolation matrix from locations and fields
+subroutine qg_getvalues_build(locs,fld,t1,t2,hmat)
+
+implicit none
+
+! Passed variables
+type(qg_locs), intent(in) :: locs      !< Locations
+type(qg_fields),intent(in) :: fld      !< Fields
+type(datetime),intent(in) :: t1, t2    !< times
+type(csr_format),intent(inout) :: hmat !< Interpolation matrix
+
+! Local variables
+integer :: jloc
+real(kind_real), pointer :: lonlat(:,:)
+type(atlas_field) :: lonlat_field
+
+!AQ interpolator
+integer :: nlev = 1
+character(len=aq_strlen) :: msg
+integer :: ib
+real(kind_real), allocatable :: lonmod(:), latmod(:)
+real(kind_real), dimension(1,1) :: dummylev
+real(kind_real), dimension(1) :: dummycoord
+real(kind_real), dimension(:), allocatable :: dummytime
+
+! Get locations
+lonlat_field = locs%lonlat()
+call lonlat_field%data(lonlat)
+
+if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
+
+if (fld%geom%fmpi%rank() == 0) then
+  !AQ could be stored once for all in the geometry so to avoid the extraction at every build.
+  allocate(lonmod(fld%geom%grid%nx(1)))
+  allocate(latmod(fld%geom%grid%ny()))
+  do ib = 1, fld%geom%grid%nx(1)
+     lonmod(ib) = fld%geom%grid%x(ib,1)
+  end do
+  do ib = 1, fld%geom%grid%ny()
+     latmod(ib) = fld%geom%grid%y(ib)
+  end do
+  allocate(dummytime(locs%nlocs()))
+  dummytime(:) = 0_kind_real
+
+  do jloc = 1, locs%nlocs()
+     if ( locs%times(jloc) < t1 .or. locs%times(jloc) > t2 ) then
+        write(msg,'(A,I0,A)') &
+           & 'WARNING from qg_getvalues_build: location nr. ',jloc,' does not fit in the current time interval'
+        call fckit_log%warning(msg)
+     end if
+  end do
+  
+  call observ_operator ( &
+     &   fld%geom%grid%ny(), &
+     &   fld%geom%grid%nx(1), &
+     &   1, & ! Only on input level in the gathered surface field
+     &   1, & ! Only one exact time (no time interpolation)
+     &   latmod, &
+     &   lonmod, &
+     &   dummycoord, & ! Vert coord not relevat
+     &   dummycoord, & ! Obs time not relevant
+     &   locs%nlocs(), &
+     &   1, & ! Levels in and out are 1
+     &   1, &
+     &   lonlat(2,:), &
+     &   lonlat(1,:), &
+     &   .false., & ! aq grid not considered as lon periodic
+     &   dummytime, &
+     &   dummylev, &
+     &   2, & ! It is the ground interpolator option
+     &   .false., & ! no input scaling
+     &   .false., & ! no averaging kernel
+     &   .false., & ! no time interpolation
+     &   Hmat)
+
+  write(msg,'(A)') 'Built interpolator'
+  call fckit_log%debug(msg)
+  
+  deallocate(lonmod)
+  deallocate(latmod)
+  deallocate(dummytime)
+endif
+!Release memory
+call lonlat_field%final()
+
+end subroutine qg_getvalues_build
 ! ------------------------------------------------------------------------------
 !> Interpolation from fields
 subroutine qg_getvalues_interp(locs,fld,t1,t2,gom)
@@ -42,44 +137,26 @@ subroutine qg_getvalues_interp(locs,fld,t1,t2,gom)
 implicit none
 
 ! Passed variables
-type(qg_locs), intent(inout) :: locs      !< Locations
+type(qg_locs), intent(in) :: locs      !< Locations
 type(qg_fields),intent(in) :: fld      !< Fields
 type(datetime),intent(in) :: t1, t2    !< times
 type(qg_gom),intent(inout) :: gom      !< Interpolated values
 
 ! Local variables
-integer :: jloc
-real(kind_real), pointer :: lonlat(:,:), z(:)
-type(atlas_field) :: lonlat_field, z_field
-!AQ type(qg_fields) :: fld_gom
+real(kind_real), pointer :: lonlat(:,:)
+type(atlas_field) :: lonlat_field
 
-!AQ interpolator draft
+!AQ interpolator
 integer :: nlev = 1
 real(aq_real), allocatable, dimension(:,:) :: surf_fld
 integer       :: n_vars
 character(len=:), allocatable :: var_name(:)
 character(len=aq_strlen) :: msg
-integer :: ib
-real(kind_real), allocatable :: lonmod(:), latmod(:)
-real(kind_real), dimension(1,1) :: dummylev
-real(kind_real), dimension(1) :: dummycoord
-real(kind_real), dimension(:), allocatable :: dummytime
 type(csr_format) :: Hmat
 
 ! Get locations
 lonlat_field = locs%lonlat()
 call lonlat_field%data(lonlat)
-z_field = locs%altitude()
-call z_field%data(z)
-
-!AQ Check field
-!AQ call qg_fields_check(fld)
-
-!AQ Create field with GOM variables (mistake?)
-!AQ call qg_fields_create(fld_gom,fld%geom,gom%vars,.true.)
-
-!AQ Apply change of variables (mistake?)
-!AQ call qg_change_var(fld,fld_gom)
 
 if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
 
@@ -91,44 +168,11 @@ allocate(surf_fld(fld%geom%grid%nx(1),fld%geom%grid%ny()))
 call fld%gather_var_at_lev(trim(var_name(1)), nlev, surf_fld, 0)
 
 if (fld%geom%fmpi%rank() == 0) then
-   write(msg,'(3A,I2,2(A,G16.8))') 'Interpolate ',trim(var_name(1)),' at lev ',nlev,' max fld', maxval(surf_fld),' min fld', minval(surf_fld)
-   call fckit_log%info(msg)
+  write(msg,'(3A,I2,2(A,G16.8))') 'Interpolate  ',trim(var_name(1)),' at lev ',nlev,' min fld', minval(surf_fld),' max fld', maxval(surf_fld)
+  call fckit_log%debug(msg)
 
-  !AQ could be stored once for all in the geometry so to avoid the extraction at every obs operator.
-  allocate(lonmod(fld%geom%grid%nx(1)))
-  allocate(latmod(fld%geom%grid%ny()))
-  do ib = 1, fld%geom%grid%nx(1)
-     lonmod(ib) = fld%geom%grid%x(ib,1)
-  end do
-  do ib = 1, fld%geom%grid%ny()
-     latmod(ib) = fld%geom%grid%y(ib)
-  end do
-  allocate(dummytime(locs%nlocs()))
-  dummytime(:) = 0_kind_real
-  
-  call observ_operator ( &
-     &   fld%geom%grid%ny(), &
-     &   fld%geom%grid%nx(1), &
-     &   1, & ! Only on input level in the gathered surface field
-     &   1, & ! Only one exact time (no time interpolation)
-     &   latmod, &
-     &   lonmod, &
-     &   dummycoord, & ! Vert coord not relevat
-     &   dummycoord, & ! Obs time not relevant
-     &   locs%nlocs(), &
-     &   1, & ! Levels in and out are 1
-     &   1, &
-     &   lonlat(2,:), &
-     &   lonlat(1,:), &
-     &   .false., & ! aq grid not considered as lon periodic
-     &   dummytime, &
-     &   dummylev, &
-     &   2, & ! It is the ground interpolator option
-     &   .false., & ! no input scaling
-     &   .false., & ! no averaging kernel
-     &   .false., & ! no time interpolation
-     &   Hmat)
-
+  call qg_getvalues_build(locs,fld,t1,t2,hmat)
+   
   call multiply_matrix_csr_vector( &
      &   Hmat, &
      &   pack(surf_fld,.true.), &
@@ -136,32 +180,18 @@ if (fld%geom%fmpi%rank() == 0) then
      &   locs%nlocs(), &
      &   gom%x)
 
-  write(msg,'(3A,I2,2(A,G16.8))') 'Interpolated ',trim(var_name(1)),' at lev ',nlev,' max Hx', maxval(gom%x),' min Hx', minval(gom%x)
-  call fckit_log%info(msg)
+  write(msg,'(3A,I2,2(A,G16.8))') 'Interpolated ',trim(var_name(1)),' at lev ',nlev,' min Hx', minval(gom%x),' max Hx', maxval(gom%x)
+  call fckit_log%debug(msg)
   
-!AQ!$omp parallel do schedule(static) private(jloc)
-!AQ  do jloc=1,locs%nlocs()
-!AQ    ! Check if current obs is in this time frame (t1,t2]
-!AQ    if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
-!AQ      ! Interpolate variables
-!AQ      ! call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!AQ      ! &                                               z(jloc),surf_fld,gom%x(jloc))
-!AQ    endif
-!AQ  enddo
-!AQ!$omp end parallel do
-  deallocate(lonmod)
-  deallocate(latmod)
-  deallocate(dummytime)
 endif
 !Release memory
 deallocate(surf_fld)
 call lonlat_field%final()
-call z_field%final()
 
 end subroutine qg_getvalues_interp
 ! ------------------------------------------------------------------------------
 !> Interpolation from fields - tangent linear
-subroutine qg_getvalues_interp_tl(locs,fld,t1,t2,gom)
+subroutine qg_getvalues_interp_tl(locs,fld,t1,t2,hmat,gom)
 
 implicit none
 
@@ -169,42 +199,15 @@ implicit none
 type(qg_locs), intent(in) :: locs      !< Locations
 type(qg_fields),intent(in) :: fld      !< Fields
 type(datetime),intent(in) :: t1, t2    !< times
+type(csr_format),intent(in) :: hmat    !< Interpolation matrix
 type(qg_gom),intent(inout) :: gom      !< Interpolated values
 
-! Local variables
-integer :: jloc
-real(kind_real), pointer :: lonlat(:,:), z(:)
-type(atlas_field) :: lonlat_field, z_field
-!AQ type(qg_fields) :: fld_gom
-
-!AQ interpolator draft
+!AQ interpolator
 integer :: nlev = 1
 real(aq_real), allocatable, dimension(:,:) :: surf_fld
 integer       :: n_vars
 character(len=:), allocatable :: var_name(:)
 character(len=aq_strlen) :: msg
-!AQ following is useless if the matrix Hmat is stored
-integer :: ib
-real(kind_real), allocatable :: lonmod(:), latmod(:)
-real(kind_real), dimension(1,1) :: dummylev
-real(kind_real), dimension(1) :: dummycoord
-real(kind_real), dimension(:), allocatable :: dummytime
-type(csr_format) :: Hmat
-
-! Get locations
-lonlat_field = locs%lonlat()
-call lonlat_field%data(lonlat)
-z_field = locs%altitude()
-call z_field%data(z)
-
-! ! Check field
-! call qg_fields_check(fld)
-
-! ! Create field with GOM variables
-! call qg_fields_create(fld_gom,fld%geom,gom%vars,.false.)
-
-! ! Apply change of variables
-! call qg_change_var_tl(fld,fld_gom)
 
 if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
 
@@ -216,41 +219,7 @@ allocate(surf_fld(fld%geom%grid%nx(1),fld%geom%grid%ny()))
 call fld%gather_var_at_lev(trim(var_name(1)), nlev, surf_fld, 0)
 
 if (fld%geom%fmpi%rank() == 0) then
-  !AQ From here to AQ-END-OPTI could be avoided if the matrix was stored
-  allocate(lonmod(fld%geom%grid%nx(1)))
-  allocate(latmod(fld%geom%grid%ny()))
-  do ib = 1, fld%geom%grid%nx(1)
-     lonmod(ib) = fld%geom%grid%x(ib,1)
-  end do
-  do ib = 1, fld%geom%grid%ny()
-     latmod(ib) = fld%geom%grid%y(ib)
-  end do
-  allocate(dummytime(locs%nlocs()))
-  dummytime(:) = 0_kind_real
   
-  call observ_operator ( &
-     &   fld%geom%grid%ny(), &
-     &   fld%geom%grid%nx(1), &
-     &   1, & ! Only on input level in the gathered surface field
-     &   1, & ! Only one exact time (no time interpolation)
-     &   latmod, &
-     &   lonmod, &
-     &   dummycoord, & ! Vert coord not relevat
-     &   dummycoord, & ! Obs time not relevant
-     &   locs%nlocs(), &
-     &   1, & ! Levels in and out are 1
-     &   1, &
-     &   lonlat(2,:), &
-     &   lonlat(1,:), &
-     &   .false., & ! aq grid not considered as lon periodic
-     &   dummytime, &
-     &   dummylev, &
-     &   2, & ! It is the ground interpolator option
-     &   .false., & ! no input scaling
-     &   .false., & ! no averaging kernel
-     &   .false., & ! no time interpolation
-     &   Hmat)
-  !AQ-END-OPTI
   call multiply_matrix_csr_vector( &
      &   Hmat, &
      &   pack(surf_fld,.true.), &
@@ -258,36 +227,17 @@ if (fld%geom%fmpi%rank() == 0) then
      &   locs%nlocs(), &
      &   gom%x)
 
-  write(msg,'(3A,I2,2(A,G16.8))') 'Linear interp of ',trim(var_name(1)),' at lev ',nlev,' max Hx', maxval(gom%x),' min Hx', minval(gom%x)
-  call fckit_log%info(msg)
-  !AQ From here to AQ-END-OPTI could be avoided if the matrix was stored
-  deallocate(lonmod)
-  deallocate(latmod)
-  deallocate(dummytime)
-  !AQ-END-OPTI
+  write(msg,'(3A,I2,2(A,G16.8))') 'Linear interp of ',trim(var_name(1)),' at lev ',nlev,' min Hx', minval(gom%x),' max Hx', maxval(gom%x)
+  call fckit_log%debug(msg)
 endif
-
-
-!AQ!$omp parallel do schedule(static) private(jloc)
-!AQdo jloc=1,locs%nlocs()
-!AQ  ! Check if current obs is in this time frame (t1,t2]
-!AQ  if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
-!AQ    ! Interpolate variables
-!AQ    call qg_interp_trilinear(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!AQ                             z(jloc),fld_gom%x,gom%x(jloc))
-!AQ  endif
-!AQenddo
-!AQ!$omp end parallel do
 
 ! Release memory
 deallocate(surf_fld)
-call lonlat_field%final()
-call z_field%final()
 
 end subroutine qg_getvalues_interp_tl
 ! ------------------------------------------------------------------------------
 !> Interpolation from fields - adjoint
-subroutine qg_getvalues_interp_ad(locs,fld,t1,t2,gom)
+subroutine qg_getvalues_interp_ad(locs,fld,t1,t2,hmat,gom)
 
 implicit none
 
@@ -295,44 +245,16 @@ implicit none
 type(qg_locs), intent(in) :: locs      !< Locations
 type(qg_fields),intent(inout) :: fld   !< Fields
 type(datetime),intent(in) :: t1, t2    !< times
+type(csr_format),intent(in) :: hmat    !< Interpolation matrix
 type(qg_gom),intent(in) :: gom         !< Interpolated values
 
-! Local variables
-integer :: jloc
-real(kind_real),allocatable :: x(:,:,:),q(:,:,:),u(:,:,:),v(:,:,:)
-real(kind_real), pointer :: lonlat(:,:), z(:)
-type(atlas_field) :: lonlat_field, z_field
-!AQ type(qg_fields) :: fld_gom,fld_tmp
-
-!AQ interpolator draft
+!AQ interpolator
 integer :: nlev = 1
 real(aq_real), allocatable, dimension(:) :: surf_1d
 real(aq_real), allocatable, dimension(:,:) :: surf_fld
 integer       :: n_vars
 character(len=:), allocatable :: var_name(:)
 character(len=aq_strlen) :: msg
-!AQ following is useless if the matrix Hmat is stored
-integer :: ib
-real(kind_real), allocatable :: lonmod(:), latmod(:)
-real(kind_real), dimension(1,1) :: dummylev
-real(kind_real), dimension(1) :: dummycoord
-real(kind_real), dimension(:), allocatable :: dummytime
-type(csr_format) :: Hmat
-
-! Get locations
-lonlat_field = locs%lonlat()
-call lonlat_field%data(lonlat)
-z_field = locs%altitude()
-call z_field%data(z)
-
-! Check field
-! call qg_fields_check(fld)
-
-! ! Create field with GOM variables
-! call qg_fields_create(fld_gom,fld%geom,gom%vars,.false.)
-
-! ! Initialization
-! call qg_fields_zero(fld_gom)
 
 if (trim(fld%geom%orientation) == 'down') nlev = fld%geom%levels
 
@@ -343,53 +265,8 @@ var_name = gom%vars%varlist()
 allocate(surf_fld(fld%geom%grid%nx(1),fld%geom%grid%ny()))
 surf_fld(:,:) = 0_kind_real
 
-!AQdo jloc=locs%nlocs(),1,-1
-!AQ  ! Check if current obs is in this time frame (t1,t2]
-!AQ  if (t1 < locs%times(jloc) .and. locs%times(jloc) <= t2) then
-!AQ    ! Interpolate variables
-!AQ    call qg_interp_trilinear_ad(fld%geom,lonlat(1,jloc),lonlat(2,jloc), &
-!AQ    &                                                  z(jloc),gom%x(jloc),fld_gom%x)
-!AQ  endif
-!AQenddo
-
 if (fld%geom%fmpi%rank() == 0) then
 
-  !AQ From here to AQ-END-OPTI could be avoided if the matrix was stored
-  allocate(lonmod(fld%geom%grid%nx(1)))
-  allocate(latmod(fld%geom%grid%ny()))
-  do ib = 1, fld%geom%grid%nx(1)
-     lonmod(ib) = fld%geom%grid%x(ib,1)
-  end do
-  do ib = 1, fld%geom%grid%ny()
-     latmod(ib) = fld%geom%grid%y(ib)
-  end do
-  allocate(dummytime(locs%nlocs()))
-  dummytime(:) = 0_kind_real
-  
-  call observ_operator ( &
-     &   fld%geom%grid%ny(), &
-     &   fld%geom%grid%nx(1), &
-     &   1, & ! Only on input level in the gathered surface field
-     &   1, & ! Only one exact time (no time interpolation)
-     &   latmod, &
-     &   lonmod, &
-     &   dummycoord, & ! Vert coord not relevat
-     &   dummycoord, & ! Obs time not relevant
-     &   locs%nlocs(), &
-     &   1, & ! Levels in and out are 1
-     &   1, &
-     &   lonlat(2,:), &
-     &   lonlat(1,:), &
-     &   .false., & ! aq grid not considered as lon periodic
-     &   dummytime, &
-     &   dummylev, &
-     &   2, & ! It is the ground interpolator option
-     &   .false., & ! no input scaling
-     &   .false., & ! no averaging kernel
-     &   .false., & ! no time interpolation
-     &   Hmat)
-  !AQ-END-OPTI
-  
    allocate(surf_1d(fld%geom%grid%nx(1)*fld%geom%grid%ny()))
    surf_1d = 0_kind_real
    call addmult_matrixt_csr_vector( &
@@ -400,26 +277,15 @@ if (fld%geom%fmpi%rank() == 0) then
       &   surf_1d)
    surf_fld = unpack(surf_1d,surf_fld==0_kind_real,surf_fld)
    deallocate(surf_1d)
-  !AQ From here to AQ-END-OPTI could be avoided if the matrix was stored
-  deallocate(lonmod)
-  deallocate(latmod)
-  deallocate(dummytime)
-  !AQ-END-OPTI
-   write(msg,'(3A,I2,2(A,G16.8))') 'Adjoint interp of ',trim(var_name(1)),' at lev ',nlev,' max dx', maxval(surf_fld),' min dx', minval(surf_fld)
-  call fckit_log%info(msg)
+
+   write(msg,'(3A,I2,2(A,G16.8))') 'Adjoint interp of ',trim(var_name(1)),' at lev ',nlev,' min dx', minval(surf_fld),' max dx', maxval(surf_fld)
+  call fckit_log%debug(msg)
 endif
 
 call fld%scatteradd_var_at_lev(trim(var_name(1)), nlev, surf_fld, 0)
 
-! ! Apply change of variables
-! call qg_fields_create_from_other(fld_tmp,fld,fld%geom)
-! call qg_change_var_ad(fld_gom,fld_tmp)
-! call qg_fields_self_add(fld,fld_tmp)
-
 ! Release memory
 deallocate(surf_fld)
-call lonlat_field%final()
-call z_field%final()
 
 end subroutine qg_getvalues_interp_ad
 ! ------------------------------------------------------------------------------

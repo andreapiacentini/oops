@@ -57,7 +57,9 @@ typedef int F90ovec;
 typedef int F90odb;
 // Localization matrix
 typedef int F90lclz;
-
+// Obs op matrix
+typedef int F90hmat;
+  
 /// Interface to Fortran QG model
 /*!
  * The core of the QG model is coded in Fortran.
@@ -120,12 +122,15 @@ extern "C" {
   void qg_getvalues_interp_f90(const LocationsQG &, const F90flds &,
                                const util::DateTime &,
                                const util::DateTime &, const F90gom &);
+  void qg_getvalues_build_f90(const LocationsQG &, const F90flds &,
+                              const util::DateTime &,
+                              const util::DateTime &, const F90hmat &);
   void qg_getvalues_interp_tl_f90(const LocationsQG &, const F90flds &,
                                   const util::DateTime &,
-                                  const util::DateTime &, const F90gom &);
+                                  const util::DateTime &, const F90hmat &, const F90gom &);
   void qg_getvalues_interp_ad_f90(const LocationsQG &, const F90flds &,
                                   const util::DateTime &,
-                                  const util::DateTime &, const F90gom &);
+                                  const util::DateTime &, const F90hmat &, const F90gom &);
 
 // -----------------------------------------------------------------------------
 //  Geometry

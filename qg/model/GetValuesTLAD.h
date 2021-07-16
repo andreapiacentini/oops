@@ -56,6 +56,7 @@ class GetValuesTLAD : public util::Printable,
  private:
   void print(std::ostream &) const;
   LocationsQG locs_;
+  F90hmat hmat_;
 };
 // -----------------------------------------------------------------------------
 

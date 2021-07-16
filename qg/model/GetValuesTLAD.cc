@@ -32,8 +32,8 @@ GetValuesTLAD::GetValuesTLAD(const GeometryQG & geom, const LocationsQG & locs,
 // -----------------------------------------------------------------------------
 void GetValuesTLAD::setTrajectory(const StateQG & state, const util::DateTime & t1,
                                   const util::DateTime & t2, GomQG & geovals) {
-  qg_getvalues_interp_f90(locs_, state.fields().toFortran(),
-                          t1, t2, geovals.toFortran());
+  qg_getvalues_build_f90(locs_, state.fields().toFortran(),
+                         t1, t2, hmat_);
 }
 // -----------------------------------------------------------------------------
 /// Get increment values at observation locations
@@ -41,13 +41,13 @@ void GetValuesTLAD::setTrajectory(const StateQG & state, const util::DateTime & 
 void GetValuesTLAD::fillGeoVaLsTL(const IncrementQG & inc, const util::DateTime & t1,
                                   const util::DateTime & t2, GomQG & geovals) const {
   qg_getvalues_interp_tl_f90(locs_, inc.fields().toFortran(),
-                             t1, t2, geovals.toFortran());
+                             t1, t2, hmat_, geovals.toFortran());
 }
 // -----------------------------------------------------------------------------
 void GetValuesTLAD::fillGeoVaLsAD(IncrementQG & inc, const util::DateTime & t1,
                                   const util::DateTime & t2, const GomQG & geovals) const {
   qg_getvalues_interp_ad_f90(locs_, inc.fields().toFortran(),
-                             t1, t2, geovals.toFortran());
+                             t1, t2, hmat_, geovals.toFortran());
 }
 // -----------------------------------------------------------------------------
 void GetValuesTLAD::print(std::ostream & os) const {
