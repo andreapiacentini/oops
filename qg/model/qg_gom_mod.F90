@@ -153,7 +153,7 @@ nv = nv+1
 allocate(values(nv,self%nobs))
 
 ! Generate random GOM values
-call normal_distribution(values,0.0_kind_real,1.0_kind_real)
+call normal_distribution(values,0.0_kind_real,1.0_kind_real,seed=14871,reset=.true.)
 
 ! Split random values
 nv = 0

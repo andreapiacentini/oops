@@ -184,6 +184,9 @@ if (fld%geom%fmpi%rank() == 0) then
   call fckit_log%debug(msg)
   
 endif
+
+call fld%geom%fmpi%broadcast(gom%x,root=0)
+
 !Release memory
 deallocate(surf_fld)
 call lonlat_field%final()
@@ -230,6 +233,8 @@ if (fld%geom%fmpi%rank() == 0) then
   write(msg,'(3A,I2,2(A,G16.8))') 'Linear interp of ',trim(var_name(1)),' at lev ',nlev,' min Hx', minval(gom%x),' max Hx', maxval(gom%x)
   call fckit_log%debug(msg)
 endif
+
+call fld%geom%fmpi%broadcast(gom%x,root=0)
 
 ! Release memory
 deallocate(surf_fld)
