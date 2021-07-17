@@ -318,12 +318,12 @@ ecbuild_add_test( TARGET  test_qg_obs_aux_covariance
                   LIBS    qg
                   TEST_DEPENDS test_qg_make_obs_4d_24h )
 
-ecbuild_add_test( TARGET  test_qg_obs_iterator
-                  SOURCES executables/TestObsIterator.cc
-                  ARGS    "testinput/aq_interfaces.yaml"
-                  LIBS    qg
-                  TEST_DEPENDS test_qg_make_obs_4d_24h )
-
+#ecbuild_add_test( TARGET  test_qg_obs_iterator
+#                  SOURCES executables/TestObsIterator.cc
+#                  ARGS    "testinput/aq_interfaces.yaml"
+#                  LIBS    qg
+#                  TEST_DEPENDS test_qg_make_obs_4d_24h )
+#
 #ecbuild_add_test( TARGET  test_qg_obs_localization
 #                  SOURCES executables/TestObsLocalization.cc
 #                  ARGS    "testinput/interfaces.yaml"

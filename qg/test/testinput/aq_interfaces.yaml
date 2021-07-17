@@ -76,13 +76,6 @@ observations:
   rms ref: 183502589.5028424
   reference global nobs: 263
   tolerance: 1.0e-8
-  obs iterator test:
-    tolerance: 1.0e-6
-    reference nlocs: 263
-    lon1: -14.0
-    lat1: 33.0
-    lon2: 35.0
-    lat2: 66.0
 - obs error:
     covariance model: diagonal
   geovals:
