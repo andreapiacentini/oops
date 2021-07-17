@@ -283,7 +283,7 @@ type(qg_obsvec),intent(in) :: other   !< Other observation vector
 if ((self%nobs/=other%nobs).or.(self%nlev/=other%nlev)) call abor1_ftn('qg_obsvec_div: inconsistent sizes')
 
 ! Divide observation vector
-where(self%values /= self%missing .and. other%values /= other%missing)
+where(self%values /= self%missing .and. other%values /= other%missing .and. abs(other%values)>1.e-30)
   self%values = self%values/other%values
 elsewhere
   self%values = self%missing
@@ -321,7 +321,7 @@ implicit none
 type(qg_obsvec),intent(inout) :: self !< Observation vector
 
 ! Invert observation vector
-where(self%values /= self%missing) self%values = 1.0/self%values
+where(self%values /= self%missing .and. abs(self%values)>1.e-30) self%values = 1.0/self%values
 
 end subroutine qg_obsvec_invert
 ! ------------------------------------------------------------------------------
