@@ -2,35 +2,7 @@ variables: &vars
   - CO
   - O_3
   - NO_2
-  # - NO
-  # - O1D
-  # - NO_3
-  # - H_2O_2
-  # - PAN
-  # - H_2O
-  # - SO_2
-  # - CH_4
-  # - HCHO
-  # - MO2
-  # - N_2O_5
-  # - HNO_3
-  # - XO2
-  # - HCl
-  # - ClO
-  # - BrO
-  # - SO_2
-  # - H_2SO_4
-  # - CH_3
-  # - CH_3O
-  # - NH_3
-  # - HNO_4
-  # - ClONO_2
-  # - O_x
-  # - NO_x
-  # - OH
-  # - HO_2
-
-geometry:
+gems02 geometry: &gems02_geom
   nx: 260
   ny: 200
   dx: 0.2
@@ -38,37 +10,31 @@ geometry:
   x0: -15.9
   y0:  32.1
   domain: GEMS02
-  # nx: 720
-  # ny: 440
-  # dx: 0.1
-  # dy: 0.1
-  # x0: -25.95
-  # y0:  28.05
-  # domain: MACC01
   levels: 5
   orientation: up
+geometry: *gems02_geom
 
 state test:
   statefile:
-    date: 2010-07-05T07:00:00Z
-    filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001/HMGEMS02+2010070507.nc
+    date: 2010-07-04T01:00:00Z
+    filename: /archive/pae/daimon/SEEDS_ENSEMBLES/GEMS02_40MEMBERS_PERTSET003/E0001/HMGEMS02+2010070401.nc
     state variables: *vars
   statefileout:
     datadir: Data
-    date: '2010-07-05T07:00:00Z'
-    filename: Data/HMGEMS02+2010070507_out.nc
+    date: '2010-07-04T01:00:00Z'
+    filename: Data/HMGEMS02+2010070401_out.nc
     state variables: *vars
   state generate:
     analytic_init: large-vortices
-    date: 2010-07-05T07:00:00Z
+    date: 2010-07-04T01:00:00Z
     state variables: *vars
-  date: 2010-07-05T07:00:00Z
-  norm file: 0.57329011E-04
+  date: 2010-07-04T01:00:00Z
+  norm file: 0.571914995356E-04
   norm generated state: 1160.96861298991234
   tolerance: 1.0e-08
 
 increment test:
-  date: 2010-07-05T07:00:00Z
+  date: 2010-07-04T01:00:00Z
 inc variables: *vars
 
 window begin: 2010-07-04T09:00:00Z
@@ -108,11 +74,11 @@ observations:
     norm: 10.0
     relative tolerance: 0.0
   rms ref: 183502589.5028424
-  reference global nobs: 800
+  reference global nobs: 263
   tolerance: 1.0e-8
   obs iterator test:
     tolerance: 1.0e-6
-    reference nlocs: 800
+    reference nlocs: 263
     lon1: -14.0
     lat1: 33.0
     lon2: 35.0
@@ -145,5 +111,5 @@ observations:
     norm: 10.0
     relative tolerance: 0.0
   rms ref: 183502589.5028424
-  reference global nobs: 800
+  reference global nobs: 925
   tolerance: 1.0e-8

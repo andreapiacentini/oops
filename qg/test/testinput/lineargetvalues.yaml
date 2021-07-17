@@ -23,8 +23,8 @@ linear getvalues test:
 locations:
   window begin: 2010-07-04T01:00:00Z
   window end: 2010-07-04T02:00:00Z
-  lons: [ -10, -8, 3, 15, 18, 24, 30, 33]
-  lats: [  35, 64, 41, 50, 60, 33, 48, 34]
+  lons: [ -10, -8, 3, 15, 18, 24, 30, 33 ]
+  lats: [  35, 64, 41, 50, 60, 33, 48, 34 ]
   nrandom: 10
   random lon min: -15.9
   random lon max: 35.9
