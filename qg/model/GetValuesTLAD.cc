@@ -26,8 +26,13 @@ GetValuesTLAD::GetValuesTLAD(const GeometryQG & geom, const LocationsQG & locs,
                              const eckit::Configuration & linearGetValuesConf)
   : locs_(locs)
 {
+  qg_getvalues_setup_f90(hmat_);
   oops::Log::trace() << "GetValuesTLAD create: linearGetValuesConf = " <<
                         linearGetValuesConf << std::endl;
+}
+// -----------------------------------------------------------------------------
+GetValuesTLAD::~GetValuesTLAD() {
+  qg_getvalues_delete_f90(hmat_);
 }
 // -----------------------------------------------------------------------------
 void GetValuesTLAD::setTrajectory(const StateQG & state, const util::DateTime & t1,

@@ -15,6 +15,7 @@ use qg_geom_mod
 use qg_gom_mod
 use qg_locs_mod
 use interp_matrix_structure_mod, only : csr_format
+use matrix_manipulations, only: deallocate_operator
 
 implicit none
 
@@ -57,9 +58,9 @@ implicit none
 
 ! Passed variables
 type(c_ptr),value,intent(in) :: c_locs          !< locations
-integer(c_int),intent(in) :: c_key_fld           !< Fields
-type(c_ptr),value,intent(in) :: c_t1, c_t2       !< times
-integer(c_int),intent(inout) :: c_key_hmat       !< Interpolation matrix
+integer(c_int),intent(in) :: c_key_fld          !< Fields
+type(c_ptr),value,intent(in) :: c_t1, c_t2      !< times
+integer(c_int),intent(in) :: c_key_hmat         !< Interpolation matrix
 
 ! Local variables
 type(qg_locs) :: locs
@@ -70,11 +71,10 @@ type(datetime) :: t1, t2
 ! Interface
 locs = qg_locs(c_locs)
 call qg_fields_registry%get(c_key_fld,fld)
-call qg_hmat_registry%init()
-call qg_hmat_registry%add(c_key_hmat)
 call qg_hmat_registry%get(c_key_hmat,hmat)
 call c_f_datetime(c_t1, t1)
 call c_f_datetime(c_t2, t2)
+
 ! Call Fortran
 call qg_getvalues_build(locs,fld,t1,t2,hmat)
 
@@ -143,5 +143,43 @@ call c_f_datetime(c_t2, t2)
 call qg_getvalues_interp_ad(locs,fld,t1,t2,hmat,gom)
 
 end subroutine qg_getvalues_interp_ad_c
+! ------------------------------------------------------------------------------
+subroutine qg_getvalues_setup_c(c_key_hmat) bind(c,name='qg_getvalues_setup_f90')
+
+implicit none
+
+! Passed variables
+integer(c_int),intent(inout) :: c_key_hmat          !< Interpolation matrix
+
+! Local variables
+type(csr_format), pointer :: hmat
+
+! Interface
+call qg_hmat_registry%init()
+call qg_hmat_registry%add(c_key_hmat)
+call qg_hmat_registry%get(c_key_hmat,hmat)
+
+end subroutine qg_getvalues_setup_c
+! ------------------------------------------------------------------------------
+subroutine qg_getvalues_delete_c(c_key_hmat) bind(c,name='qg_getvalues_delete_f90')
+
+implicit none
+
+! Passed variables
+integer(c_int),intent(inout) :: c_key_hmat          !< Interpolation matrix
+
+! Local variables
+type(csr_format), pointer :: hmat
+
+! Interface
+call qg_hmat_registry%get(c_key_hmat,hmat)
+
+! Call Fortran
+call deallocate_operator(hmat)
+
+! Clear interface
+call qg_hmat_registry%remove(c_key_hmat)
+
+end subroutine qg_getvalues_delete_c
 ! ------------------------------------------------------------------------------
 end module qg_getvalues_interface

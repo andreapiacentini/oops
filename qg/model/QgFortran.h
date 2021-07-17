@@ -119,6 +119,8 @@ extern "C" {
 // -----------------------------------------------------------------------------
 //  GetValues
 // -----------------------------------------------------------------------------
+  void qg_getvalues_setup_f90(const F90hmat &);
+  void qg_getvalues_delete_f90(const F90hmat &);
   void qg_getvalues_interp_f90(const LocationsQG &, const F90flds &,
                                const util::DateTime &,
                                const util::DateTime &, const F90gom &);

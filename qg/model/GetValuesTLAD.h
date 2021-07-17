@@ -37,7 +37,7 @@ class GetValuesTLAD : public util::Printable,
 /// \brief saves all locations \p locs to use during filling GeoVaLs
   GetValuesTLAD(const GeometryQG &, const LocationsQG & locs,
                 const eckit::Configuration &);
-  ~GetValuesTLAD() {}
+  ~GetValuesTLAD();
 
   /// \brief fills in \p geovals for all observations in the timeframe (\p t1, \p t2],
   //  \p geovals are interpolated trilinearly from \p state at the nearest gridpoints
